@@ -54,7 +54,7 @@ I introduce two new methods to the "change in EFW" treatment effects that I didn
 
 1) Examine EFW score **drops**. $\leftarrow$ seems more symmetrical and we'd expect to see changes in the corresponding (but opposite) direction. This examines the "liberalism failures" as well as the successes.
 
-2) Examine EFW **rank** changes. $\leftarrow$ I've seen a lot of comments/push-back on the validity of the EFW index score. Changes to the relative **rank** of a country short-circuits reviewer comments overly concerned with "EFW data issues". Changes in relative rank will not capture changes in secular, worldwide trends of liberalisation. 
+2) Examine EFW **rank** changes. $\leftarrow$ I've seen a lot of comments/push-back on the validity of the EFW index score. Changes to the relative **rank** of a country short-circuits reviewer comments overly concerned with "EFW data issues". Changes in relative rank will not capture changes in secular, worldwide trends towards more liberalisation. 
 This analysis can "be in our back pocket" if we encounter such a reviewer. 
 
 
@@ -229,7 +229,7 @@ Covariates listed above may be subject to change. See "Caveats" below.
 # PSM Results
 
 ATT estimates with bootstrap standard errors (200 replications, seed
-12345) for the two PSM estimators, and with analytic Abadie-Imbens
+50726) for the two PSM estimators, and with analytic Abadie-Imbens
 standard errors for the Mahalanobis estimator. Significance stars:
 \* p<0.10, \*\* p<0.05, \*\*\* p<0.01.
 
