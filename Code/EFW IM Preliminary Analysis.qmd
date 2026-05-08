@@ -1,0 +1,350 @@
+---
+title: "EFW and Infant Mortality: Preliminary Analysis"
+subtitle: "Propensity Score Matching Estimates of the Effect of Economic Freedom Changes"
+date: today
+author: "Geloso & Wilhelm"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    theme: cosmo
+    code-fold: true
+    self-contained: true
+execute:
+  echo: false
+  warning: false
+  message: false
+link-external-newwindow: true
+---
+
+```{r setup}
+library(dplyr)
+library(knitr)
+library(kableExtra)
+
+# Load pre-computed results from 2) Analysis.R
+qd <- readRDS("analysis_results.rds")
+invisible(list2env(qd, envir = environment()))   # invisible() prevents the
+                                                  # returned environment object
+                                                  # from rendering under the title
+
+# Significance star helper
+sig_stars <- function(p) {
+  case_when(p < 0.01 ~ "***", p < 0.05 ~ "**", p < 0.10 ~ "*", TRUE ~ "")
+}
+```
+
+# Introduction
+
+This is a preliminary analysis of the causal effect of large,
+sustained changes in economic freedom (EFW) on infant mortality outcomes (IM).
+Methodology draws from Callais & Young (2023) and Grier (2025), extending
+their propensity-score matching framework to infant mortality. I also include
+two measures that assess changes in the statistical uncertainty of each country's estimates for IM: confidence interval and relative precision.
+
+
+This analysis will form the basis of two papers:
+1) EFW changes on IM
+2) EFW changes on estimate **precision** as a proxy for "state capacity" (other than the "size and scope of government" hokum)
+
+I introduce (for consideration) two new methods to the "change in EFW" treatment effects that I didn't see in the EFW treatment literature:
+
+1) Examine EFW score **drops**. $\leftarrow$ seems more symmetrical and we'd expect to see changes in the corresponding (but opposite) direction. This examines the "liberalism failures" in addition to the successes.
+
+2) Examine EFW **rank** changes. $\leftarrow$ I've seen a lot of comments/push-back on the validity of the EFW index score. Changes to the relative **rank** of a country short-circuits reviewer comments overly concerned with "EFW data issues". Changes in relative rank will not capture changes in overall, worldwide trends in liberalisation. 
+This analysis can "be in our back pocket" if we encounter such a reviewer. 
+
+
+**Outcomes** (5-year periods):
+
+1. $\Delta\text{IM}$ — change in infant mortality rate (per 1,000 live births)
+2. $\Delta\text{con\_int}$ — change in confidence interval width ($\text{IM\_upper} - \text{IM\_lower}$)
+3. $\Delta\text{rp}$ — change in relative precision $= (\text{con\_int}/2)\,/\,\text{IM}$
+
+For $\Delta\text{IM}$, a *negative* ATT indicates a sustained EFW liberalisation
+event is associated with a *larger decline* in infant mortality among
+treated countries.
+
+
+# Summary Statistics
+
+```{r sumstats-table}
+sumstats %>%
+  kbl(caption = "Summary statistics — full estimation sample",
+      col.names = c("Variable", "Mean", "Std. Dev.", "Min", "Max"),
+      digits = 3, booktabs = TRUE) %>%
+  kable_styling(full_width = FALSE, position = "left",
+                bootstrap_options = c("striped", "hover", "condensed")) %>%
+  pack_rows("Outcome variables", 1, 3) %>%
+  pack_rows("EFW change variables", 4, 5) %>%
+  pack_rows("PSM covariates", 6, 13)
+```
+
+
+# Definitions of EFW Treatments
+
+We identify four types of EFW events in a 5-year panel from
+1970 to 2015. Treatments are constructed in `1) Import_Merge.R` and grouped
+by economic interpretation:
+
+| Group | Treatment | Definition | Interpretation |
+|:------|:----------|:-----------|:---------------|
+| **A** | **EFW Score Jump** | EFW index rose $\geq +1.0$ point over 5 years | Liberalisation |
+| **A** | **EFW Rank Drop** | EFW rank improved $\geq 17$ places (lower rank = more free) | Liberalisation |
+| **B** | **EFW Score Drop** | EFW index fell $\leq -1.0$ point over 5 years | Restriction |
+| **B** | **EFW Rank Jump** | EFW rank worsened $\geq 17$ places | Restriction |
+
+::: {.callout-note}
+We can modify the "rank change" cutoff to identify treatment. I chose 17 because there are 162 countries in EFW. A 1/10th change is equivalent to a change in relative rankings by 162/10 rounded up.
+:::
+
+A rise in EFW *score* corresponds to a fall in *rank* (Rank 1 = most free).
+Group A and Group B identify the same underlying directional
+change, measured two ways: 1) Changes in Index Score and 2) Changes in Relative Rank. 
+
+Observations adjacent to any qualifying event within the same country are set to NA (lag 1, lag 2, lead 1) to avoid
+contamination from overlapping reform episodes (Callais & Young 2023). Venezuela 2000 is excluded as a structural break. (I follow Callais & Young exaclty here. We can alter accordingly if you see fit.)
+
+## Treatment Episodes — Group A: Liberalisation
+
+### EFW Score Jumps ($\Delta\text{EFW} \geq +1.0$)
+
+```{r tbl-jump}
+tbl_EFWjump %>%
+  kbl(caption = paste0("EFW Score Jump episodes (N = ", nrow(tbl_EFWjump), "). ",
+                       "Sorted by magnitude of EFW increase."),
+      col.names = c("Country", "Period", "EFW Change"),
+      booktabs = TRUE, align = c("l","c","r")) %>%
+  kable_styling(full_width = FALSE, position = "left",
+                bootstrap_options = c("striped","hover","condensed"))
+```
+
+### EFW Rank Drops: Relative Rank Improved $\geq 17$ Places
+
+```{r tbl-rankdrop}
+tbl_EFWrankdrop %>%
+  kbl(caption = paste0("EFW Rank Drop episodes (N = ", nrow(tbl_EFWrankdrop), "). ",
+                       "Sorted by size of rank improvement (most negative first)."),
+      col.names = c("Country", "Period", "Rank Change"),
+      booktabs = TRUE, align = c("l","c","r")) %>%
+  kable_styling(full_width = FALSE, position = "left",
+                bootstrap_options = c("striped","hover","condensed"))
+```
+
+## Treatment Episodes — Group B: Restriction
+
+### EFW Score Drops ($\Delta\text{EFW} \leq -1.0$)
+
+```{r tbl-drop}
+tbl_EFWdrop %>%
+  kbl(caption = paste0("EFW Score Drop episodes (N = ", nrow(tbl_EFWdrop), "). ",
+                       "Sorted by magnitude of EFW decrease."),
+      col.names = c("Country", "Period", "EFW Change"),
+      booktabs = TRUE, align = c("l","c","r")) %>%
+  kable_styling(full_width = FALSE, position = "left",
+                bootstrap_options = c("striped","hover","condensed"))
+```
+
+### EFW Rank Jumps: Relative Rank Worsened $\geq 17$ Places
+
+```{r tbl-rankjump}
+tbl_EFWrankjump %>%
+  kbl(caption = paste0("EFW Rank Jump episodes (N = ", nrow(tbl_EFWrankjump), "). ",
+                       "Sorted by size of rank worsening (most positive first)."),
+      col.names = c("Country", "Period", "Rank Change"),
+      booktabs = TRUE, align = c("l","c","r")) %>%
+  kable_styling(full_width = FALSE, position = "left",
+                bootstrap_options = c("striped","hover","condensed"))
+```
+
+
+# PSM Methodology
+
+## Three Matching Estimators
+
+For each treatment $\times$ outcome combination we estimate the Average
+Treatment Effect on the Treated (ATT) using three matching specifications.
+All three condition on the same vector of pre-treatment covariates (see
+[Covariates](#covariates) below). Differences across the three estimators
+provide a robustness check; agreement across them strengthens the causal
+interpretation.
+
+### 1. PSM — 3 Nearest Neighbors (NN3)
+
+A logistic regression of the binary treatment on the covariate vector
+produces a **propensity score** for each observation. Each treated unit is
+then matched to its 3 nearest control units on the propensity score within
+a caliper of 0.25 standard deviations (Austin 2011). Matching is done
+*without replacement*: each control unit can serve as a match for only one
+treated unit. The ATT is the average outcome difference between treated
+units and their matched controls. Standard errors are computed by
+non-parametric bootstrap (200 replications, seed 50726).
+
+### 2. PSM — Epanechnikov Kernel
+
+Same logit-based propensity score as NN3, but each treated unit is
+compared to a *weighted average* of all control units, where the weights
+follow an Epanechnikov kernel function (declining smoothly with PS
+distance). This estimator uses information from many controls per treated
+unit, trading some variance reduction for reliance on the kernel
+specification. Standard errors by bootstrap (200 replications).
+
+### 3. Mahalanobis NN3 with Bias Adjustment
+
+Skips the propensity-score model entirely. Each treated unit is matched to
+its 3 nearest controls in the **full covariate space** using Mahalanobis
+distance (which accounts for covariance among covariates)^[c'est méta, but the covariance matrix accounts for how much the covariates are correlated with each other]. An
+Abadie-Imbens (2011) bias correction is applied via regression adjustment.
+Standard errors are computed analytically. Matching is done *with
+replacement*, so a strong control unit can match several treated units.
+
+## Covariates {#covariates}
+
+Each treatment regression conditions on the following pre-treatment
+covariates (all lagged one 5-year period to ensure measurement before the
+treatment event, following Callais & Young 2023 and the existing Stata
+pipeline `Results_DecileGrowth5yr.do`)^[I did this analysis in R.]:
+
+| Covariate | Description | Source |
+|:----------|:------------|:-------|
+| `lagEFW` | EFW summary index (lagged) | Fraser Institute |
+| `laghc` | Human capital index | Penn World Tables |
+| `laglngdppc` | Log GDP per capita | Penn World Tables |
+| `laglngdppc2` | Log GDP per capita squared | Penn World Tables |
+| `laggdpc_5growth` | 5-year GDP per capita growth | Penn World Tables |
+| `lagfertilrate` | Fertility rate | World Bank WDI |
+| `lagoldagedep` | Old-age dependency ratio | World Bank WDI |
+| `lagpolity2` | Polity2 democracy score | Polity5 |
+| `lagurbanpop` | Urban population share | World Bank WDI |
+| Lagged outcome | Lagged level of the specific regression's outcome | UNICEF |
+
+::: {.callout-note}
+Presented covariates may be subject to change.
+:::
+
+
+# PSM Results
+
+ATT estimates with bootstrap standard errors (200 replications, seed
+12345) for the two PSM estimators, and with analytic Abadie-Imbens
+standard errors for the Mahalanobis estimator. Significance stars:
+\* p<0.10, \*\* p<0.05, \*\*\* p<0.01.
+
+A **negative ATT** for $\Delta\text{IM}$ indicates that treated countries
+saw a *larger decline* in infant mortality than comparable untreated
+countries — a beneficial effect.
+
+```{r results-tables, results="asis"}
+outcome_labels <- c("Infant Mortality Rate", "CI Width (con_int)", "Relative Precision (rp)")
+
+for (tspec in treatment_specs) {
+  tlabel <- tspec$label
+
+  cat(sprintf("\n## %s\n\n", tlabel))
+  cat(sprintf("*%s*\n\n", tspec$desc))
+
+  for (olabel in outcome_labels) {
+    res <- all_results[[tlabel]][[olabel]]
+
+    if (is.null(res)) {
+      cat(sprintf("**%s**: Insufficient treated units — skipped.\n\n", olabel))
+      next
+    }
+
+    res_fmt <- res %>%
+      mutate(
+        ATT_str  = sprintf("%.4f%s", ATT, sig_stars(p_value)),
+        SE_str   = sprintf("(%.4f)", SE),
+        CI_str   = sprintf("[%.4f, %.4f]", CI_lo, CI_hi)
+      ) %>%
+      dplyr::select(Estimator, `N Treated` = N_treated,
+                    ATT = ATT_str, SE = SE_str, `95% CI` = CI_str)
+
+    cat(sprintf("**Outcome: %s**\n\n", olabel))
+    print(kbl(res_fmt,
+              caption = sprintf("ATT of %s on %s", tlabel, olabel),
+              booktabs = TRUE, escape = FALSE, align = c("l","r","r","r","r")) %>%
+            kable_styling(full_width = FALSE, position = "left",
+                          bootstrap_options = c("striped","hover","condensed")) %>%
+            footnote(general = "Bootstrap SE (200 reps) for PSM NN3 and PSM Kernel; Abadie-Imbens SE for Mahalanobis. *** p<0.01, ** p<0.05, * p<0.10.",
+                     general_title = "Notes:", footnote_as_chunk = TRUE))
+    cat("\n\n")
+  }
+}
+```
+
+
+# Balance & Distribution Diagnostics
+
+Balance diagnostics restricted to the two outcomes specified in the
+analysis brief: **Infant Mortality Rate** ($\Delta\text{IM}$) and
+**Relative Precision** ($\Delta\text{rp}$). For each treatment we show:
+
+1. **Propensity-score density plot** — kernel density of the estimated
+   propensity score for treated and control units, before vs after PSM
+   NN3 matching. Better overlap on the right panel = better matched-sample
+   comparability.
+2. **Love plot** — standardized mean differences (SMDs) for each PSM
+   covariate, before vs after matching. Dashed reference lines at
+   $\pm 0.10$ mark the threshold below which a covariate is conventionally
+   considered well balanced (Austin 2011).
+
+```{r balance-plots, results="asis", fig.width=9, fig.height=4.8}
+balance_outcome_labels <- c("Infant Mortality Rate", "Relative Precision (rp)")
+
+for (tspec in treatment_specs) {
+  tlabel <- tspec$label
+  cat(sprintf("\n## %s {.unnumbered}\n\n", tlabel))
+
+  for (olabel in balance_outcome_labels) {
+    plots <- balance_plots[[tlabel]][[olabel]]
+    if (is.null(plots)) {
+      cat(sprintf("**Outcome: %s** — balance plots unavailable.\n\n", olabel))
+      next
+    }
+    cat(sprintf("### Outcome: %s {.unnumbered}\n\n", olabel))
+    print(plots$ps_density)
+    cat("\n")
+    print(plots$love)
+    cat("\n\n")
+  }
+}
+```
+
+
+# Caveats
+
+::: {.callout-warning}
+## Caveats
+
+- **Years covered.** The current sample spans **1970–2015**, solely relying on
+  the Callais & Young covariate panel. Extending through 2023/24 will require sourcing more recent versions of the
+  underlying covariate series (PWT, WDI, Polity5). The covariates we select may change and need to be updated.
+- **EFW & IM data.** The Fraser Institute EFW Index 2025 edition (covering
+  1970–2023) and the UN IGME Infant Mortality Rate dataset used here are the
+  latest and greatest publicly available data.
+- **Covariates.** The propensity-score covariates in this analysis are taken **directly**
+  from Callais & Young (2023). To exploit the full 1970–2023 EFW window, the covariates we deem most relevant need to be **updated and extended through 2023/24** (and potentially expanded to include health-specific controls relevant
+  to the infant-mortality outcome).
+- **Fertility Rate.** A country's fertility rate likely has a more direct endogenous relationship with infant mortality. We need to be careful about how fertility rate fits in our specification and identification strategy. Naively including it in our basket of PSM covariates seems to be moving the difference in means (between treated and control groups) in the unbalanced direction.
+:::
+
+
+# Questions and Considerations for Vincent
+
+
+1. Do you want to include **drops** in scores?
+  If yes, this means we'll have **two treatment groups**. I assume **both** the treated jumps and drops should be removed from the control group before matching and balancing?
+2. Do you want to include **changes in rank**?
+  This can be straightforwardly done in the analysis, but we may not want to include it in the paper we submit?
+3. You mentioned the Statistical Performance Indicators database [SPI](https://www.worldbank.org/en/programs/statistical-performance-indicators/explore-data)
+  This series only goes back to 2016. The legacy Statistical Capacity Index [SCI](https://datacatalog.worldbank.org/search/dataset/0037854/data-on-statistical-capacity) has coverage from 2003-2020. This could potentially overlap with four (5-year) periods in our panel. Let me know if/how you would like to use this as a point of comparison for the "statistical estimate quality" paper.
+
+# References
+
+Austin, Peter C. "An introduction to propensity score methods for reducing the effects of confounding in observational studies." Multivariate behavioral research 46.3 (2011): 399-424.
+
+Callais, Justin T., and Andrew T. Young. "A rising tide that lifts all boats: An analysis of economic freedom and inequality using matching methods." Journal of Comparative Economics 51.3 (2023): 744-777.
+
+Grier, Robin. "The causal effect of economic freedom on female employment & education." Contemporary Economic Policy 43.4 (2025): 698-713.

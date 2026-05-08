@@ -1,0 +1,13 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.positai
+
+# Claude Code working directory
+.claude/
+
+# Generated analysis artefacts (produced by 2) Analysis.R)
+Code/analysis_results.rds
+Code/Figures/
+merged.csv
