@@ -41,18 +41,20 @@ This is a preliminary analysis of the causal effect of large,
 sustained changes in economic freedom (EFW) on infant mortality outcomes (IM).
 The methodology draws from Callais & Young (2023) and Grier (2025), extending
 their propensity-score matching framework to infant mortality. I also include
-two measures that assess changes in the statistical uncertainty of each country's estimates for IM: confidence interval (con_int) and relative precision (rp).
+two measures that assess changes in the statistical uncertainty of each country's estimates for IM: confidence interval (con_int = upper_limit - lower_limit) and relative precision (rp = [con_int/2]/IM).
 
 
-This analysis will form the basis of two papers:
+This analysis forms the basis for two papers:
+
 1) EFW changes on IM
+
 2) EFW changes on estimate **precision** as a proxy for "state capacity" (other than the "size and scope of government" hokum)
 
-I introduce (for consideration) two new methods to the "change in EFW" treatment effects that I didn't see in the EFW treatment literature:
+I introduce two new methods to the "change in EFW" treatment effects that I didn't see in the EFW treatment literature:
 
-1) Examine EFW score **drops**. $\leftarrow$ seems more symmetrical and we'd expect to see changes in the corresponding (but opposite) direction. This examines the "liberalism failures" in addition to the successes.
+1) Examine EFW score **drops**. $\leftarrow$ seems more symmetrical and we'd expect to see changes in the corresponding (but opposite) direction. This examines the "liberalism failures" as well as the successes.
 
-2) Examine EFW **rank** changes. $\leftarrow$ I've seen a lot of comments/push-back on the validity of the EFW index score. Changes to the relative **rank** of a country short-circuits reviewer comments overly concerned with "EFW data issues". Changes in relative rank will not capture changes in overall, worldwide trends in liberalisation. 
+2) Examine EFW **rank** changes. $\leftarrow$ I've seen a lot of comments/push-back on the validity of the EFW index score. Changes to the relative **rank** of a country short-circuits reviewer comments overly concerned with "EFW data issues". Changes in relative rank will not capture changes in secular, worldwide trends of liberalisation. 
 This analysis can "be in our back pocket" if we encounter such a reviewer. 
 
 
@@ -219,8 +221,8 @@ pipeline `Results_DecileGrowth5yr.do`)^[I did this analysis in R.]:
 | `lagurbanpop` | Urban population share | World Bank WDI |
 | Lagged outcome | Lagged level of the specific regression's outcome | UNICEF |
 
-::: {.callout-note}
-Presented covariates may be subject to change.
+::: {.callout-warning}
+Covariates listed above may be subject to change. See "Caveats" below.
 :::
 
 
@@ -334,12 +336,12 @@ for (tspec in treatment_specs) {
 # Questions and Considerations for Vincent
 
 
-1. Do you want to include **drops** in scores?
-  If yes, this means we'll have **two treatment groups**. I assume **both** the treated jumps and drops should be removed from the control group before matching and balancing?
-2. Do you want to include **changes in rank**?
-  This can be straightforwardly done in the analysis, but we may not want to include it in the paper we submit?
+1. Do you want to include **drops** in EFW scores?
+  If yes, this means we'll have **two different treatment groups**. I assume **both** the treated jumps and drops should be removed from the control group before matching and balancing?
+2. Do you want to include **changes in relative rank**?
+  This can be straightforwardly done in the analysis, but we may not want to include them in the papers we submit?
 3. You mentioned the Statistical Performance Indicators database [SPI](https://www.worldbank.org/en/programs/statistical-performance-indicators/explore-data)
-  This series only goes back to 2016. The legacy Statistical Capacity Index [SCI](https://datacatalog.worldbank.org/search/dataset/0037854/data-on-statistical-capacity) has coverage from 2003-2020. This could potentially overlap with four (5-year) periods in our panel. Let me know if/how you would like to use this as a point of comparison for the "statistical estimate quality" paper.
+  This series only goes back to 2016. The legacy Statistical Capacity Index [SCI](https://datacatalog.worldbank.org/search/dataset/0037854/data-on-statistical-capacity) has coverage from 2003-2020. This could potentially overlap with four of the (5-year) periods in our panel. Let me know if/how you would like to use this as a point of comparison for the "statistical estimate quality" paper.
 
 # References
 

@@ -2636,12 +2636,16 @@ window.Quarto = {
 
 <section id="introduction" class="level1" data-number="1">
 <h1 data-number="1"><span class="header-section-number">1</span> Introduction</h1>
-<p>This is a preliminary analysis of the causal effect of large, sustained changes in economic freedom (EFW) on infant mortality outcomes (IM). The methodology draws from Callais &amp; Young (2023) and Grier (2025), extending their propensity-score matching framework to infant mortality. I also include two measures that assess changes in the statistical uncertainty of each country’s estimates for IM: confidence interval (con_int) and relative precision (rp).</p>
-<p>This analysis will form the basis of two papers: 1) EFW changes on IM 2) EFW changes on estimate <strong>precision</strong> as a proxy for “state capacity” (other than the “size and scope of government” hokum)</p>
-<p>I introduce (for consideration) two new methods to the “change in EFW” treatment effects that I didn’t see in the EFW treatment literature:</p>
+<p>This is a preliminary analysis of the causal effect of large, sustained changes in economic freedom (EFW) on infant mortality outcomes (IM). The methodology draws from Callais &amp; Young (2023) and Grier (2025), extending their propensity-score matching framework to infant mortality. I also include two measures that assess changes in the statistical uncertainty of each country’s estimates for IM: confidence interval (con_int = upper_limit - lower_limit) and relative precision (rp = [con_int/2]/IM).</p>
+<p>This analysis forms the basis for two papers:</p>
 <ol type="1">
-<li><p>Examine EFW score <strong>drops</strong>. <span class="math inline">\(\leftarrow\)</span> seems more symmetrical and we’d expect to see changes in the corresponding (but opposite) direction. This examines the “liberalism failures” in addition to the successes.</p></li>
-<li><p>Examine EFW <strong>rank</strong> changes. <span class="math inline">\(\leftarrow\)</span> I’ve seen a lot of comments/push-back on the validity of the EFW index score. Changes to the relative <strong>rank</strong> of a country short-circuits reviewer comments overly concerned with “EFW data issues”. Changes in relative rank will not capture changes in overall, worldwide trends in liberalisation. This analysis can “be in our back pocket” if we encounter such a reviewer.</p></li>
+<li><p>EFW changes on IM</p></li>
+<li><p>EFW changes on estimate <strong>precision</strong> as a proxy for “state capacity” (other than the “size and scope of government” hokum)</p></li>
+</ol>
+<p>I introduce two new methods to the “change in EFW” treatment effects that I didn’t see in the EFW treatment literature:</p>
+<ol type="1">
+<li><p>Examine EFW score <strong>drops</strong>. <span class="math inline">\(\leftarrow\)</span> seems more symmetrical and we’d expect to see changes in the corresponding (but opposite) direction. This examines the “liberalism failures” as well as the successes.</p></li>
+<li><p>Examine EFW <strong>rank</strong> changes. <span class="math inline">\(\leftarrow\)</span> I’ve seen a lot of comments/push-back on the validity of the EFW index score. Changes to the relative <strong>rank</strong> of a country short-circuits reviewer comments overly concerned with “EFW data issues”. Changes in relative rank will not capture changes in secular, worldwide trends of liberalisation. This analysis can “be in our back pocket” if we encounter such a reviewer.</p></li>
 </ol>
 <p><strong>Outcomes</strong> (5-year periods):</p>
 <ol type="1">
@@ -4074,17 +4078,17 @@ Table 4: EFW Rank Jump episodes (N = 77). Sorted by size of rank worsening (mos
 </tr>
 </tbody>
 </table>
-<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout callout-style-default callout-warning callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-Note
+Warning
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p>Presented covariates may be subject to change.</p>
+<p>Covariates listed above may be subject to change. See “Caveats” below.</p>
 </div>
 </div>
 </section>
@@ -5206,9 +5210,9 @@ Mahalanobis NN3 (BA)
 <section id="questions-and-considerations-for-vincent" class="level1" data-number="8">
 <h1 data-number="8"><span class="header-section-number">8</span> Questions and Considerations for Vincent</h1>
 <ol type="1">
-<li>Do you want to include <strong>drops</strong> in scores? If yes, this means we’ll have <strong>two treatment groups</strong>. I assume <strong>both</strong> the treated jumps and drops should be removed from the control group before matching and balancing?</li>
-<li>Do you want to include <strong>changes in rank</strong>? This can be straightforwardly done in the analysis, but we may not want to include it in the paper we submit?</li>
-<li>You mentioned the Statistical Performance Indicators database <a href="https://www.worldbank.org/en/programs/statistical-performance-indicators/explore-data">SPI</a> This series only goes back to 2016. The legacy Statistical Capacity Index <a href="https://datacatalog.worldbank.org/search/dataset/0037854/data-on-statistical-capacity">SCI</a> has coverage from 2003-2020. This could potentially overlap with four (5-year) periods in our panel. Let me know if/how you would like to use this as a point of comparison for the “statistical estimate quality” paper.</li>
+<li>Do you want to include <strong>drops</strong> in EFW scores? If yes, this means we’ll have <strong>two different treatment groups</strong>. I assume <strong>both</strong> the treated jumps and drops should be removed from the control group before matching and balancing?</li>
+<li>Do you want to include <strong>changes in relative rank</strong>? This can be straightforwardly done in the analysis, but we may not want to include them in the papers we submit?</li>
+<li>You mentioned the Statistical Performance Indicators database <a href="https://www.worldbank.org/en/programs/statistical-performance-indicators/explore-data">SPI</a> This series only goes back to 2016. The legacy Statistical Capacity Index <a href="https://datacatalog.worldbank.org/search/dataset/0037854/data-on-statistical-capacity">SCI</a> has coverage from 2003-2020. This could potentially overlap with four of the (5-year) periods in our panel. Let me know if/how you would like to use this as a point of comparison for the “statistical estimate quality” paper.</li>
 </ol>
 </section>
 <section id="references" class="level1" data-number="9">
