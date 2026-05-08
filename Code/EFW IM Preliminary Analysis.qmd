@@ -1,6 +1,6 @@
 ---
 title: "EFW and Infant Mortality: Preliminary Analysis"
-subtitle: "Propensity Score Matching Estimates of the Effect of Economic Freedom Changes"
+subtitle: "Propensity Score Matching Estimates of Major Changes in Economic Freedom"
 date: today
 author: "Geloso & Wilhelm"
 format:
@@ -39,9 +39,9 @@ sig_stars <- function(p) {
 
 This is a preliminary analysis of the causal effect of large,
 sustained changes in economic freedom (EFW) on infant mortality outcomes (IM).
-Methodology draws from Callais & Young (2023) and Grier (2025), extending
+The methodology draws from Callais & Young (2023) and Grier (2025), extending
 their propensity-score matching framework to infant mortality. I also include
-two measures that assess changes in the statistical uncertainty of each country's estimates for IM: confidence interval and relative precision.
+two measures that assess changes in the statistical uncertainty of each country's estimates for IM: confidence interval (con_int) and relative precision (rp).
 
 
 This analysis will form the basis of two papers:
