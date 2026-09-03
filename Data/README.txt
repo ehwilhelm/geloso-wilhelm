@@ -1,4 +1,4 @@
-Data Sources for Mergedd Database
+Data Sources for Merged Database
 
 Infant Mortality Estimates and Confidence Intervals
 United Nations Inter-agency Group for Child Mortality Estimation (UN IGME)
