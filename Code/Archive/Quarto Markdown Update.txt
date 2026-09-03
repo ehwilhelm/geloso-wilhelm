@@ -1,0 +1,18 @@
+Update Quarto Markdown to include:
+
+Do not edit "1) Import_Merge.R"!
+Let me know if you edit "2) Analysis.R"
+
+1) Summary Statistics Table
+2) Definitions of EFW Score Jump/Drop and EFW Rank Jump/Drop
+    a. Include summary table of countries and years of "Treatment" for each Definitions
+    b. There will be four tables
+    c. Follow similar format of table as Grier and Callais & Young
+3) Summarize the three PSM methods
+4) List table of covariates
+5) Include all diagnostic tables from "2) Analysis.R"
+6) Leave a call-out box labelled "Caveats" 
+    a. Years Covered 1970-2015
+    b. EFW & IM data from UN are latest and greatest
+    c. Covariates are directly from Callais & Young. They need to be updated and extended to 2023/24
+7) Add a final section called "Questions for Vincent" for me to fill in

@@ -1,0 +1,306 @@
+---
+title: "Infant Mortality, Liberalizations and Interventionism: A Causal Analysis Accounting for Data Quality"
+subtitle: "Data-quality proxy: `rp` (relative precision)"
+date: today
+author: "Geloso & Wilhelm"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    theme: cosmo
+    code-fold: true
+    self-contained: true
+execute:
+  echo: false
+  warning: false
+  message: false
+link-external-newwindow: true
+---
+
+```{r setup}
+library(dplyr)
+library(knitr)
+library(kableExtra)
+library(ggplot2)
+
+# Load pre-computed results from 2) Analysis.R
+qd <- readRDS("analysis_results.rds")
+invisible(list2env(qd, envir = environment()))
+
+# Which data-quality proxy this document is built around
+PROXY <- "rp"             # "con_int" or "rp"
+
+# Significance star helper
+sig_stars <- function(p) {
+  case_when(p < 0.01 ~ "***", p < 0.05 ~ "**", p < 0.10 ~ "*", TRUE ~ "")
+}
+```
+
+# Introduction
+
+This analysis tests whether large, sustained changes in economic freedom
+(EFW) cause changes in infant mortality (IMR), and — more pointedly —
+**how much of that effect is hidden or revealed when we control for
+data quality**.
+
+The treatment of interest is a 5-year EFW score change of $\geq +1$ point
+("liberalization") or $\leq -1$ point ("deliberalization" / restriction).
+The outcome is the 5-year change in the country's infant mortality rate.
+Methodology mirrors Callais & Young (2023) and Grier (2025), with three
+matching estimators per test (PSM NN3, PSM Kernel, Mahalanobis NN3 with
+Abadie-Imbens bias adjustment).
+
+We run **8 tests** combining: treatment direction, presence/absence of a
+data-quality control, and presence/absence of a control-group filter that
+removes opposite-direction events from the pool of potential matches.
+
+**Two data-quality proxies** are examined in parallel — the analysis
+script (`2) Analysis.R`) computes results for both, and this document
+reports **`rp` (relative precision)**. A companion document presents the same
+analysis using `con_int` (absolute CI width).
+
+::: {.callout-note}
+## Tradeoffs between `con_int` and `rp` as a data-quality control
+
+Both measures derive from the UNICEF/UN-IGME Bayesian B-spline model and
+quantify the uncertainty around each country-year IMR estimate.
+
+- **`con_int`** = $\text{IM\_upper} - \text{IM\_lower}$ — the absolute
+  width of the 90% credible interval. *Pros:* directly interpretable in
+  IMR units (deaths per 1,000); strongly correlated with sample size and
+  vital-registration completeness. *Cons:* mechanically larger when IMR
+  itself is larger, so high-mortality countries look "lower quality" by
+  default even if their measurement infrastructure is identical.
+- **`rp`** = $(\text{con\_int}/2) / \text{IMR}$ — relative precision: the
+  half-width as a fraction of the point estimate. *Pros:* scale-free;
+  isolates measurement quality from the level of mortality. *Cons:*
+  becomes unstable when IMR is very low (denominator approaches zero),
+  potentially exaggerating "noise" in advanced economies that are
+  actually well-measured.
+
+Vincent's preference is **`con_int`**: easier to interpret, and the
+mechanical correlation with mortality level is partially absorbed by the
+lagged IMR covariate (`lag_IM`) that is already in the propensity-score
+model. The `rp`-based analysis serves as a robustness check.
+:::
+
+
+# Summary Statistics
+
+```{r sumstats-table}
+sumstats %>%
+  kbl(caption = "Summary statistics — full estimation sample",
+      col.names = c("Variable", "Mean", "Std. Dev.", "Min", "Max"),
+      digits = 3, booktabs = TRUE) %>%
+  kable_styling(full_width = FALSE, position = "left",
+                bootstrap_options = c("striped", "hover", "condensed")) %>%
+  pack_rows("Outcome variable",     1, 1) %>%
+  pack_rows("Data-quality proxies", 2, 3) %>%
+  pack_rows("EFW change variable",  4, 4) %>%
+  pack_rows("PSM covariates",       5, 15)
+```
+
+
+# Treatment Definitions and Episodes
+
+We identify two treatment events in a 5-year quinquennial panel from
+1970 to 2015. Both are constructed in `1) Import_Merge.R`.
+
+| Treatment | Definition | Interpretation |
+|:----------|:-----------|:---------------|
+| **EFW Score Jump** | EFW index rose $\geq +1.0$ point over 5 years | **Liberalization** |
+| **EFW Score Drop** | EFW index fell $\leq -1.0$ point over 5 years | **Deliberalization** (restriction) |
+
+Observations adjacent to any qualifying event within the same country are
+set to NA (lag 1, lag 2, lead 1) to avoid contamination from overlapping
+reform episodes (Callais & Young 2023). Venezuela 2000 is excluded as a
+structural break.
+
+::: {.callout-note}
+## Rank-based treatments removed
+
+The previous version of this analysis (archived in `Code/Archive/`) also
+examined EFW *rank* changes as alternative treatments. Per the 5/8/2026
+direction, the rank analysis has been scrapped from the current paper.
+:::
+
+## EFW Score Jumps ($\Delta\text{EFW} \geq +1.0$)
+
+```{r tbl-jump}
+tbl_EFWjump %>%
+  kbl(caption = paste0("EFW Score Jump episodes (N = ", nrow(tbl_EFWjump), "). ",
+                       "Sorted by magnitude of EFW increase."),
+      col.names = c("Country", "Period", "EFW Change"),
+      booktabs = TRUE, align = c("l","c","r")) %>%
+  kable_styling(full_width = FALSE, position = "left",
+                bootstrap_options = c("striped","hover","condensed"))
+```
+
+## EFW Score Drops ($\Delta\text{EFW} \leq -1.0$)
+
+```{r tbl-drop}
+tbl_EFWdrop %>%
+  kbl(caption = paste0("EFW Score Drop episodes (N = ", nrow(tbl_EFWdrop), "). ",
+                       "Sorted by magnitude of EFW decrease."),
+      col.names = c("Country", "Period", "EFW Change"),
+      booktabs = TRUE, align = c("l","c","r")) %>%
+  kable_styling(full_width = FALSE, position = "left",
+                bootstrap_options = c("striped","hover","condensed"))
+```
+
+
+# PSM Methodology
+
+## Three Matching Estimators
+
+For each of the 8 tests we estimate the Average Treatment Effect on the
+Treated (ATT) using three matching specifications. Differences across
+the estimators are a robustness check; agreement strengthens the causal
+interpretation.
+
+### 1. PSM — 3 Nearest Neighbors (NN3)
+Logit propensity score → 3 nearest neighbors on the score, caliper of
+0.25 SDs, no replacement. Bootstrap SEs (200 reps, seed 12345).
+
+### 2. PSM — Epanechnikov Kernel
+Same logit PS as NN3; each treated unit compared to a kernel-weighted
+average of all controls within the caliper. Bootstrap SEs (200 reps).
+
+### 3. Mahalanobis NN3 with Bias Adjustment
+Skips the PS model. Each treated unit matched to its 3 nearest controls
+in the full covariate space using Mahalanobis distance, with
+Abadie-Imbens (2011) bias correction. Analytic SEs.
+
+## Covariates
+
+All covariates are **lagged one 5-year period** (pre-treatment levels).
+Covariates marked **(*)** appear only in tests where data quality is
+included as a control:
+
+| Covariate | Description | Source |
+|:----------|:------------|:-------|
+| `lagEFW`            | EFW summary index (lagged)         | Fraser Institute |
+| `laghc`             | Human capital index                | Penn World Tables |
+| `laglngdppc`        | Log GDP per capita                 | Penn World Tables |
+| `laglngdppc2`       | Log GDP per capita squared         | Penn World Tables |
+| `laggdpc_5growth`   | 5-year GDP per capita growth       | Penn World Tables |
+| `lagfertilrate`     | Fertility rate                     | World Bank WDI |
+| `lagoldagedep`      | Old-age dependency ratio           | World Bank WDI |
+| `lagpolity2`        | Polity2 democracy score            | Polity5 |
+| `lagurbanpop`       | Urban population share             | World Bank WDI |
+| `lag_IM`            | Lagged infant mortality rate       | UNICEF |
+| ``lag_rp`` **(*)** | Lagged relative precision | UNICEF |
+
+
+# Results
+
+For each test we report ATT, SE, p-value and 95% CI from the three
+matching estimators. Bootstrap SE (200 reps) for PSM NN3 and PSM Kernel;
+Abadie-Imbens analytic SE for Mahalanobis. Stars: \* p<0.10, \*\* p<0.05,
+\*\*\* p<0.01.
+
+A **negative ATT** indicates the treated group experienced a *larger
+drop* in IMR than matched controls — beneficial for liberalizations,
+adverse for deliberalizations.
+
+```{r results-loop, results="asis"}
+res_for_proxy <- results_by_proxy[[PROXY]]
+
+# Render a single test's result table
+render_test <- function(tspec, res) {
+  cat(sprintf("\n## %s\n\n", tspec$label))
+  if (is.null(res)) {
+    cat("Insufficient treated units after filtering — skipped.\n\n")
+    return(invisible(NULL))
+  }
+  res_fmt <- res %>%
+    mutate(
+      ATT_str = sprintf("%.4f%s", ATT, sig_stars(p_value)),
+      SE_str  = sprintf("(%.4f)", SE),
+      CI_str  = sprintf("[%.4f, %.4f]", CI_lo, CI_hi)
+    ) %>%
+    dplyr::select(Estimator, `N Treated` = N_treated,
+                  ATT = ATT_str, SE = SE_str, `95% CI` = CI_str)
+  print(kbl(res_fmt,
+            caption = tspec$label, booktabs = TRUE, escape = FALSE,
+            align = c("l","r","r","r","r")) %>%
+          kable_styling(full_width = FALSE, position = "left",
+                        bootstrap_options = c("striped","hover","condensed")) %>%
+          footnote(general = "Bootstrap SE (200 reps) for PSM NN3 and PSM Kernel; Abadie-Imbens SE for Mahalanobis. *** p<0.01, ** p<0.05, * p<0.10.",
+                   general_title = "Notes:", footnote_as_chunk = TRUE))
+  cat("\n\n")
+}
+
+# --- Panel A: Liberalization (1pt jumps) ---
+cat("## Panel A — Liberalization (1pt EFW Jump) {.unnumbered}\n\n")
+for (n in 1:4) {
+  tspec <- test_grid[[n]]
+  render_test(tspec, res_for_proxy[[as.character(n)]])
+}
+
+# --- Panel B: Deliberalization (1pt drops) ---
+cat("## Panel B — Deliberalization (1pt EFW Drop) {.unnumbered}\n\n")
+for (n in 5:8) {
+  tspec <- test_grid[[n]]
+  render_test(tspec, res_for_proxy[[as.character(n)]])
+}
+```
+
+
+# Balance & Distribution Diagnostics
+
+For each test, we show the propensity-score density (before vs after
+PSM NN3 matching) and a Love plot of standardized mean differences for
+every covariate in that test's PS model. Reference lines at $\pm 0.10$
+(Austin 2011) mark the conventional well-balanced threshold.
+
+```{r balance-loop, results="asis", fig.width=9, fig.height=4.8}
+plots_for_proxy <- balance_plots[[PROXY]]
+
+for (n in 1:8) {
+  tspec <- test_grid[[n]]
+  plots <- plots_for_proxy[[as.character(n)]]
+  cat(sprintf("\n## %s {.unnumbered}\n\n", tspec$label))
+  if (is.null(plots)) {
+    cat("Balance plots unavailable (insufficient treated units).\n\n")
+    next
+  }
+  print(plots$ps_density); cat("\n")
+  print(plots$love);       cat("\n\n")
+}
+```
+
+
+# Caveats
+
+::: {.callout-warning}
+## Caveats
+
+- **Years covered.** The current sample spans **1970–2015**, dictated by
+  the latest year for which the UNICEF infant mortality estimates and
+  the pre-built Callais & Young covariate panel both have coverage.
+  Extending through 2023/24 will require sourcing more recent vintages
+  of the underlying covariate series.
+- **EFW & IM data.** The Fraser Institute EFW Index 2025 edition (1970–
+  2023) and the UNICEF Infant Mortality Rate dataset used here are the
+  latest publicly available vintages.
+- **Covariates.** The propensity-score covariate set is taken **directly
+  from Callais & Young (2023)**. To exploit the full 1970–2023 EFW
+  window these covariates need to be **updated and extended through
+  2023/24** (and potentially expanded to include health-specific
+  controls relevant to infant mortality).
+- **Data-quality proxy.** This document uses **`rp` (relative precision)**.
+  Results using `con_int` (absolute CI width) appear in the companion
+  document; differences across the two are part of the robustness
+  story.
+:::
+
+
+# Questions for Vincent
+
+*[To be filled in by EHW.]*
+
+1.
+2.
+3.

@@ -1,0 +1,41 @@
+Claude Prompt Coding Instructions
+
+DO NOT TOUCH "1) Import_Merge.R"!
+
+1) Read and interpret the following papers in this directory "C:\Users\ehwil\OneDrive\Desktop\Geloso Collab\geloso-wilhelm\Papers"
+    a. Callais & Young 2023
+    b. Grier 2025
+
+2) Consider and remember both papers' methodologies for Propensity Score Matching ("PSM") and treating jumps in EFW for their outcome variables
+
+3) In our analysis, drawing from the recent dataset "alldata" created in "1) Import_Merge.R", we want to prepare a similar analysis considering both jumps and drops in EFW
+    a. Remember the 4 variables prepared in "alldata":
+        1. EFWjump
+        2. EFWdrop
+        3. EFWrankjump
+        4. EFWrankdrop
+    b. ***The outcome variables of interest in "alldata"***
+        1. infantmortality
+        2. con_int = IM_upper_bound - IM_lower_bound
+        3. rp = (con_int/2)/infantmortality
+    c. In Callais & Young, the outcome of interest is income decile growth
+    d. In Grier, the outcome variable of interest is femal employment and education
+    e. Outcome variables we are interested in are in 3)b. 1. 2. 3.
+
+4) Read and interpret R code "C:\Users\ehwil\OneDrive\Desktop\Geloso Collab\geloso-wilhelm\Code\Results_DecileGrowth5yr.R"
+    a. This R code can serve as a base template.
+    b. There is a secondary code in "C:\Users\ehwil\OneDrive\Desktop\Geloso Collab\geloso-wilhelm\Kyklos example and code\My Code.tex" that another colleague wrote doing something similar.
+        1. Read and synthesize anything that is relevant to our analysis
+
+5) Prepare a first draft R code called "C:\Users\ehwil\OneDrive\Desktop\Geloso Collab\geloso-wilhelm\Code\2) Analysis" in R with line by line comments and a Quarto Markdown file that:
+    a. Identify the changes in EFW [see: 3)a.]
+    b. Prepare 4 tables (like Grier Table 1, or Callais & Young Table 2) summarizing the countries and years for:
+        1. EFWjump
+        2. EFWrankdrop
+        3. EFWdrop
+        4. EFWrankjump
+**Make sure 1. and 2. are grouped together and 3. and 4. are grouped together. A jump in EFW corresponds to drop in rank; and visa versa.
+    c. Prepare propensity score matching relying on other variables in alldata
+    d. Using same variables used by Propensity Score Matching in Callais & Young and "Results_DecileGrowth5yr.R"
+    e. Prepare tables and summary of analysis in Markdown  
+    f. Draft and save Markdown as "EFW IM Preliminary Analysis" here "C:\Users\ehwil\OneDrive\Desktop\Geloso Collab\geloso-wilhelm\Code" 

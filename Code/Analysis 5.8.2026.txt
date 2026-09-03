@@ -1,0 +1,41 @@
+Analysis 5.8.2026
+
+Do NOT touch "1) Import_Merge.R"!
+
+Archive, revise, and update analysis
+
+1) Create subfolder in github "Code\Archive" directory
+    a. Move and DO NOT edit current versions of "EFW IM Preliminary Analysis" html/quarto files and "2) Analysis. R" into Archive folder
+    b. Move "Quarto Markdown Update" into Archive folder
+    c. After archiving, proceed to step 2) in this document
+
+2) Prepare new "2) Analysis. R" and "EFW IM Preliminary Analysis" Quarto files in "Code" directory. There will be major changes mentioned below.
+    a. Read and review "Vincent Notes" email response PDF for a summary of the changes to be made. This is the roadmap for the changes made to our Analysis.
+    b. Call the new Quarto document to "IM_Lib_Int"
+    c. Rename the title to "Infant Mortality, Liberalizations and Interventionism: A Causal Analysis Accounting for Data Quality"
+    d. **The changes in rank analysis is being scrapped**
+    e. **Change in analysis**: Outcome variable, infant mortality ("IM", "IMR"), remains. We want to see how IMR changes due to major, sustained changes in liberalization (proxied by EFW) if we include or exclude "data quality" as a control. Read through and synthesize all of step 2) in this document before proceeding.
+################################################################################################################################
+# **Terminology Check for Understanding**: "Control" is being referenced for multiple purposes. 
+#
+# We want to test the causal relationship between major, sustained changes in EFW to IMR both with and without "controlling" for data quality. This meaning is akin to a time fixed effect for data quality (con_int and rp). Those proxies for data quality change for each 5-year period.
+#
+# In the PSM methodology, there is a "treated" and non-treated "control group". The latter definition is the group of country-years that were not "treated" (AKA having a major sustained change in EFW).
+#
+# "Control" on it's own will normally mean the former. "Control Group" is the latter definition. If you are not sure about the distinction in plain English, let me know.
+################################################################################################################################
+        1. For now, run analyses using both confidence interval (con_int) and relative precision (rp) as proxies for "data quality". Create two separate "IM_Lib_Int" Quarto documents: first labeled (con_int), second labeled (rp)
+        2. Confidence interval is just the absolute width of the upper and lower bounds around an estimate. Relative precision is the ratio of standard/sampling error divided by the IMR point estimate.
+        3. Write up a description of the tradeoffs (from a methodological perspective) for using either measure of "data quality"
+            a) I think Vincent prefers (con_int) as a control for data quality.
+    f. For both proxies of "data quality", prepare the following tests (using all three PSM methodologies used in the previous analysis)
+        Test 1: 1 point jump with no data quality as a (time fixed effect) control (this should be the same as the previous version of the IM analysis; data quality proxies were not included as a control in the previous analysis)
+        Test 2: 1 point jump with data quality as a control
+        Test 3: 1 point jump with no data quality control but removing all deliberalizers (drops in EFW Score) (those in Test 5 and 6) from **control group** (before PSM matching and balancing)
+        Test 4: 1 point jump with data quality as a control but removing all deliberalizers (those in Test 5 and 6) from **control group** (before PSM matching and balancing)
+        Test 5: 1 point drop with no data quality as a control
+        Test 6: 1 point drop with data quality as a control 
+        Test 7: 1 point drop with no data quality as a control but removing all liberalizers (those in Test 1 and 2) from **control group** (before PSM matching and balancing)
+        Test 8: 1 point drop with data quality as a control but removing all liberalizers (those in Test 1 and 2) from **control group** (before PSM matching and balancing)
+
+3) Do NOT push the html to github repo for publishing until I have reviewed the updated "2) Analysis. R" and "EFW IM Preliminary Analysis" Quarto files after you make changes
