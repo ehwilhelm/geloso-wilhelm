@@ -1,0 +1,58 @@
+﻿Merging Process
+
+
+I updated the infant mortality data in ALLDATA_NEW using newer UNICEF data.
+The main goal was to keep ALLDATA_NEW the same and only update the infant mortality values where UNICEF had matching data.
+ALLDATA_NEW had about 1,174 rows and 135 columns. Each row was a country and year. It already had infant mortality data, but those values were older. UNICEF had newer infant mortality values, along with lower and upper bounds.
+First, we cleaned ALLDATA_NEW. Some rows were not real countries. They were things like notes, citations, or dataset descriptions. We removed those rows because they would not match with UNICEF.
+Next, we made the country names match between the two datasets. UNICEF sometimes used longer or official country names, while ALLDATA_NEW used shorter names.
+For example:
+* UNICEF: Republic of Türkiye
+* ALLDATA_NEW: Turkey
+We changed the UNICEF names so they matched the names in ALLDATA_NEW. This was necessary because the country names had to be exactly the same for the merge to work.
+We also changed the year format. UNICEF stored dates like:
+1990-06
+ALLDATA_NEW stored them like:
+1990
+So we took only the year from the UNICEF date.
+From UNICEF, we kept only the information we needed:
+* country
+* year
+* infant mortality value
+* lower bound
+* upper bound
+We did not use extra UNICEF data like separate male and female values because we only needed the total infant mortality value.
+Then we matched the two datasets using:
+country + year
+We used a left join, which means ALLDATA_NEW stayed as the main dataset.
+For every row in ALLDATA_NEW:
+* If UNICEF had the same country and year, we used the UNICEF values.
+* If UNICEF did not have a match, we kept the old ALLDATA_NEW values.
+We updated only three columns:
+* infantmortality using UNICEF OBS_VALUE
+* IM_lower_bound using UNICEF LOWER_BOUND
+* IM_upper_bound using UNICEF UPPER_BOUND
+All the other columns stayed the same.
+This means things like GDP, education, political data, and other variables were not changed.
+We also did not add countries that were only in UNICEF but were not already in ALLDATA_NEW. For example, some territories such as Anguilla or Aruba were in UNICEF but not in ALLDATA_NEW. Since ALLDATA_NEW was the main dataset, those countries were not added.
+We used only the UNICEF Total value for sex. We did not use separate male and female values because that could create more than one row for the same country and year and change the structure of the dataset.
+After the merge, we checked the dataset to make sure everything still looked correct.
+We checked that:
+* there were still 135 columns
+* country names matched correctly
+* years were in the correct format
+* infant mortality values were reasonable
+* lower bound ≤ infant mortality value ≤ upper bound
+* other columns had not changed
+For example, suppose ALLDATA_NEW had India in 2000 with:
+* infant mortality = 63.2
+* lower bound = 61.0
+* upper bound = 65.5
+* GDP = 450 billion
+And UNICEF had:
+* infant mortality = 57.8
+* lower bound = 55.2
+* upper bound = 60.1
+After the merge, the three infant mortality values would be updated to the UNICEF values.
+The GDP and every other variable would stay the same.
+So in simple terms, we kept ALLDATA_NEW as the main dataset and used UNICEF only to update the infant mortality values where the country and year matched.
