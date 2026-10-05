@@ -15,17 +15,37 @@ Economic Freedom of the World
 
 	https://www.fraserinstitute.org/studies/economic-freedom-world-2025-annual-report
 
+-------------------------------------------------------------------------------------------------
 
 To be added
+
+Covariates
+
+Go to p. 18 of Callais & Young 2023
+
+Penn World Tables
+
+https://www.rug.nl/ggdc/historicaldevelopment/maddison/releases/maddison-project-database-2023
+
+Polity5
+
+https://ourworldindata.org/grapher/democracy-index-polity
+
+(Remember to cite Our World in Data)
+Polity 5 (2020); Population based on various sources (2023) – processed by Our World in Data. “Democracy Index” [dataset]. Polity 5, “Polity5 Project, Political Regime Characteristics and Transitions, 1800–2018 5”; Various sources, “Population” [original data]. Retrieved October 5, 2026 from https://archive.ourworldindata.org/20260909-235947/grapher/democracy-index-polity.html (archived on September 9, 2026).
+
+https://xmarquez.github.io/democracyData/reference/download_polity_annual.html#source
+
+World Bank’s World Development Indicators
+
+https://databank.worldbank.org/source/world-development-indicators
 
 Varieties of Democracy (VDEMS)
 
 	https://www.v-dem.net/data/the-v-dem-dataset/
 
 
-Covariates
-
-Go to p. 18 of Callais & Young 2023
+-------------------------------------------------------------------------------------------------
 
 
 For periods where overlaps 
