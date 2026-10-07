@@ -1,0 +1,25 @@
+"pair","proxy","stage","smd"
+"A","con_int","Before matching",0.038
+"A","con_int","Matched without DQ control",-0.427
+"A","con_int","Matched with DQ control",-0.296
+"A","rp","Before matching",-0.131
+"A","rp","Matched without DQ control",-0.575
+"A","rp","Matched with DQ control",0.21
+"B","con_int","Before matching",0.063
+"B","con_int","Matched without DQ control",-0.12
+"B","con_int","Matched with DQ control",0.134
+"B","rp","Before matching",-0.127
+"B","rp","Matched without DQ control",-0.386
+"B","rp","Matched with DQ control",0.025
+"C","con_int","Before matching",0.722
+"C","con_int","Matched without DQ control",0.373
+"C","con_int","Matched with DQ control",0.471
+"C","rp","Before matching",0.127
+"C","rp","Matched without DQ control",0.218
+"C","rp","Matched with DQ control",0.508
+"D","con_int","Before matching",0.724
+"D","con_int","Matched without DQ control",0.013
+"D","con_int","Matched with DQ control",0.262
+"D","rp","Before matching",0.121
+"D","rp","Matched without DQ control",-0.248
+"D","rp","Matched with DQ control",0.27

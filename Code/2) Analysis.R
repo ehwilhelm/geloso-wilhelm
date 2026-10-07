@@ -1,536 +1,664 @@
 # =============================================================================
-# 2) Analysis.R   (rewritten 2026-05-08 per Vincent Notes + Analysis 5.8.2026)
+# 2) Analysis.R   (revised 2026-10-07 per Vincent Notes; May 2026 version is
+#                  frozen in Code/Archive/Code_2026-05-08/)
 #
-# Purpose: Estimate the Average Treatment Effect on the Treated (ATT) of large,
-#          sustained changes in economic freedom (EFW) on the change in infant
-#          mortality rate (IMR), with and without controlling for data quality.
+# Paper: "Infant Mortality, Liberalizations and Interventionism:
+#         A Causal Analysis Accounting for Data Quality"
 #
-#   Paper title: "Infant Mortality, Liberalizations and Interventionism:
-#                 A Causal Analysis Accounting for Data Quality"
+# Question: how much does data quality hide (or exaggerate) the change in
+#           infant mortality (IMR) that follows a large, sustained change in
+#           economic freedom (EFW)?
 #
-# Key changes vs. the prior version (now archived in Code/Archive/):
-#   - Outcome is ONLY change_IM (con_int and rp are no longer outcomes;
-#     they are now data-quality COVARIATES — Vincent does not want CI width
-#     used as a dependent variable in this paper)
-#   - Rank-based treatments (EFWrankjump, EFWrankdrop) are scrapped
-#   - 8-test framework (jump/drop x DQ-control on/off x control-group filter)
-#   - Each test is run twice: once using lag_con_int as the DQ proxy,
-#     once using lag_rp -- 2 separate RDS slices feed 2 Quarto documents
+# Design (Vincent Notes, 8 May 2026):
+#   Outcome   : 5-year change in IMR (change_IM). The UN IGME interval is NOT
+#               an outcome in this paper; it enters only as a control.
+#   Treatments: EFWjump  (5-year EFW change >= +1, "liberalizer")
+#               EFWdrop  (5-year EFW change <= -1, "deliberalizer")
+#   DQ control: lagged UN IGME 90% interval width (lag_con_int, preferred) or
+#               lagged relative precision (lag_rp), added to the matching
+#               covariates.
+#   Tests 1-8 : jump/drop x DQ control off/on x opposite-direction episodes
+#               kept/removed from the control group (see test_grid below).
 #
-# Methodology (unchanged from prior version):
-#   - Three matching estimators: PSM NN3, PSM Kernel, Mahalanobis NN3 (BA)
-#   - 200-rep bootstrap SEs (seed 12345) for the two PSM specs
-#   - Caliper = 0.25 SDs of the propensity score (Austin 2011)
+# What changed relative to the May 2026 version:
+#   1. Reads merged.csv (built by the untouched "1) Import_Merge.R") from a
+#      relative path, so the script runs on any machine.
+#   2. Jump/drop flags are rebuilt here with Callais & Young's (2023) Stata
+#      sequence (Merging.do lines 347-354). Stata's `replace` runs row by row,
+#      so after blanking a jump that follows a jump, the FIRST jump of a
+#      sustained reform survives. The May version blanked both episodes of a
+#      back-to-back pair and so dropped every sustained reformer's first
+#      episode. The Venezuela 2000 exclusion is also applied here: in
+#      merged.csv the country is spelled "Venezuela, RB", so the May rule
+#      (country == "Venezuela") never fired.
+#   3. Tests 3/4/7/8 remove EVERY opposite-direction episode (raw EFW change
+#      past -1/+1) from the control group, including episodes blanked by the
+#      adjacency rule; the May filter only removed episodes that survived it.
+#   4. Each test pair (1 vs 2, 3 vs 4, ...) is estimated on the SAME sample
+#      (rows with a non-missing data-quality proxy), so the gap between them
+#      is caused only by adding the control, not by losing observations.
+#   5. "PSM Kernel" is now a real Epanechnikov kernel estimator (psmatch2
+#      default bandwidth 0.06). Matching::Match(Weight = 2) is Mahalanobis
+#      weighting, not a kernel, so the May "kernel" column was a second
+#      nearest-neighbour estimate.
+#   6. PSM NN3 matches WITH replacement, as psmatch2 does with n(3).
+#   7. Bootstrap resamples whole countries (country-clustered, 200 reps) and
+#      re-estimates the with- and without-DQ ATTs on the same draw, giving a
+#      standard error for the headline quantity:
+#          hidden gain = ATT(with DQ control) - ATT(without DQ control).
 #
-# Run from project root (where EFW_IM_Code.Rproj lives).
+# Outputs (written to Results/):
+#   Results/tables/*.csv     - episode lists, ATT tables, hidden-gain table,
+#                              balance table
+#   Results/figures/*.png    - figures used in the results write-up
+#                              (also copied to docs/figures for the website)
+#   Code/analysis_results.rds - everything the IM_Lib_Int Quarto files need
+#
+# Run from the repository root or from Code/ (the .Rproj folder).
 # =============================================================================
 
 
 # =============================================================================
-# Part 0: Packages
+# Part 0: Packages and paths
 # =============================================================================
 
 library(dplyr)
 library(tidyr)
-library(Matching)   # PSM and Mahalanobis matching (loads MASS as a dep)
-library(boot)       # bootstrap SEs
-library(knitr)
-library(kableExtra)
+library(Matching)   # nearest-neighbour and Mahalanobis matching
 library(ggplot2)
 
+# Locate the repository root (the folder that holds Code/ and Data/)
+find_root <- function() {
+  d <- normalizePath(getwd(), winslash = "/")
+  for (i in 1:5) {
+    if (dir.exists(file.path(d, "Code")) && dir.exists(file.path(d, "Data")))
+      return(d)
+    d <- dirname(d)
+  }
+  stop("Run this script from the repository root or from Code/.")
+}
+root <- find_root()
+
+# merged.csv is written by "1) Import_Merge.R" to its working directory.
+# Look in the usual places; set MERGED_CSV to override.
+merged_candidates <- c(Sys.getenv("MERGED_CSV"),
+                       file.path(root, "Code", "merged.csv"),
+                       file.path(root, "merged.csv"),
+                       file.path(root, "Data", "merged.csv"))
+merged_path <- merged_candidates[merged_candidates != "" &
+                                 file.exists(merged_candidates)][1]
+if (is.na(merged_path))
+  stop("merged.csv not found. Run '1) Import_Merge.R' first or set MERGED_CSV.")
+
+out_dir <- file.path(root, "Results")
+tab_dir <- file.path(out_dir, "tables")
+fig_dir <- file.path(out_dir, "figures")
+dir.create(tab_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
+
+B_BOOT      <- 200     # bootstrap replications
+SEED        <- 50826   # same seed as the May version
+psm_caliper <- 0.25    # NN3 caliper, in SDs of the propensity score
+kernel_bw   <- 0.06    # Epanechnikov bandwidth (psmatch2 default)
+
 
 # =============================================================================
-# Part 1: Source the import / merge script
+# Part 1: Load data, rebuild treatments, outcome and data-quality variables
 # =============================================================================
 
-source("C:/Users/ehwil/OneDrive/Desktop/Geloso Collab/geloso-wilhelm/Code/1) Import_Merge.R")
+raw <- read.csv(merged_path, check.names = FALSE, stringsAsFactors = FALSE,
+                encoding = "UTF-8")
+cat(sprintf("Loaded %s: %d rows, years %d-%d\n", merged_path, nrow(raw),
+            min(raw$year), max(raw$year)))
 
-
-# =============================================================================
-# Part 2: Construct outcome and data-quality variables + lagEFW
-# =============================================================================
-
-# Coerce PSM lag covariates to numeric (readxl falls back to character on
-# mixed Excel columns; glm() and mean() require numeric).
 psm_lag_vars <- c("laghc", "laglngdppc", "laggdpc_5growth", "laglngdppc2",
                   "lagfertilrate", "lagoldagedep", "lagpolity2", "lagurbanpop")
-alldata <- alldata %>%
-  mutate(across(all_of(psm_lag_vars), ~ suppressWarnings(as.numeric(.))))
 
-# Build outcomes, data-quality proxies, and their lagged levels.
-# 5-year first differences (lag(., 1) = one quinquennial period).
-alldata <- alldata %>%
+# Callais & Young blanking, replicating Stata's sequential `replace`:
+#   replace x = . if L5.x  == 1   (cascades: uses already-updated values)
+#   replace x = . if L10.x == 1
+#   replace x = . if F5.x  == 1
+# Input is one country's flags in year order on a gap-free 5-year panel.
+cy_blank <- function(x) {
+  n <- length(x)
+  if (n < 2) return(x)
+  for (i in 2:n) if (x[i - 1] %in% 1) x[i] <- NA
+  if (n >= 3) for (i in 3:n) if (x[i - 2] %in% 1) x[i] <- NA
+  for (i in 1:(n - 1)) if (x[i + 1] %in% 1) x[i] <- NA
+  x
+}
+
+alldata <- raw %>%
+  mutate(across(all_of(psm_lag_vars), ~ suppressWarnings(as.numeric(.)))) %>%
+  arrange(country, year) %>%
   group_by(country) %>%
-  arrange(year) %>%
   mutate(
-    # Lagged EFW summary score (PSM covariate)
+    gap_ok   = is.na(lag(year)) | (year - lag(year)) == 5,
+    EFWdiff  = Summary - lag(Summary, 1),
+    # raw episodes (no adjacency blanking) - used for control-group filters
+    lib_episode   = as.integer(EFWdiff >=  1),
+    delib_episode = as.integer(EFWdiff <= -1),
+    EFWjump = cy_blank(lib_episode),
+    EFWdrop = cy_blank(delib_episode),
+    EFWjump = if_else(country == "Venezuela, RB" & year == 2000,
+                      NA_integer_, EFWjump),
+    EFWdrop = if_else(country == "Venezuela, RB" & year == 2000,
+                      NA_integer_, EFWdrop),
+    # PSM covariate: lagged EFW level
     lagEFW = lag(Summary, 1),
-
-    # Data-quality proxies (LEVELS)
-    con_int = IM_upper_bound - IM_lower_bound,                 # CI width
-    rp      = (con_int / 2) / infantmortality,                  # relative precision
-
-    # Outcome: 5-year change in IMR
+    # Data-quality proxies (UN IGME 90% uncertainty interval)
+    con_int = IM_upper_bound - IM_lower_bound,
+    rp      = (con_int / 2) / infantmortality,
+    # Outcome and its lag
     change_IM = infantmortality - lag(infantmortality, 1),
-
-    # Lagged levels (PS-model covariates)
     lag_IM      = lag(infantmortality, 1),
-    lag_con_int = lag(con_int,         1),
-    lag_rp      = lag(rp,              1)
+    lag_con_int = lag(con_int, 1),
+    lag_rp      = lag(rp, 1)
   ) %>%
   ungroup()
+stopifnot(all(alldata$gap_ok))
+
+# Countries that ever liberalized / deliberalized (country-level sensitivity)
+ever <- alldata %>% group_by(country) %>%
+  summarise(ever_lib   = as.integer(any(lib_episode   %in% 1)),
+            ever_delib = as.integer(any(delib_episode %in% 1)), .groups = "drop")
+alldata <- alldata %>% left_join(ever, by = "country")
+
+# Comparison with the May flags carried in merged.csv
+flag_compare <- data.frame(
+  Flag = c("EFWjump", "EFWdrop"),
+  May_2026 = c(sum(raw$EFWjump %in% 1), sum(raw$EFWdrop %in% 1)),
+  Revised  = c(sum(alldata$EFWjump %in% 1), sum(alldata$EFWdrop %in% 1)))
+print(flag_compare)
 
 
 # =============================================================================
-# Part 3: Treatment episode tables  (jump and drop only -- rank scrapped)
+# Part 2: Episode tables and summary statistics
 # =============================================================================
 
 make_period <- function(yr) paste0(yr - 5, "-", yr)
 
-tbl_EFWjump <- alldata %>%
-  filter(EFWjump == 1) %>%
+tbl_EFWjump <- alldata %>% filter(EFWjump == 1) %>%
   transmute(Country = country, Period = make_period(year),
-            `EFW Change` = round(EFWdiff, 3)) %>%
+            `EFW Change` = round(EFWdiff, 2)) %>%
   arrange(desc(`EFW Change`))
-
-tbl_EFWdrop <- alldata %>%
-  filter(EFWdrop == 1) %>%
+tbl_EFWdrop <- alldata %>% filter(EFWdrop == 1) %>%
   transmute(Country = country, Period = make_period(year),
-            `EFW Change` = round(EFWdiff, 3)) %>%
+            `EFW Change` = round(EFWdiff, 2)) %>%
   arrange(`EFW Change`)
+write.csv(tbl_EFWjump, file.path(tab_dir, "episodes_jump.csv"), row.names = FALSE)
+write.csv(tbl_EFWdrop, file.path(tab_dir, "episodes_drop.csv"), row.names = FALSE)
 
-cat("\n=== Treatment Episode Counts ===\n")
-cat(sprintf("EFWjump (score  up  >= +1.0) : %d episodes\n", nrow(tbl_EFWjump)))
-cat(sprintf("EFWdrop (score down <= -1.0) : %d episodes\n", nrow(tbl_EFWdrop)))
-
-
-# =============================================================================
-# Part 4: Summary statistics
-# =============================================================================
-
-sumstat_vars <- c("infantmortality", "con_int", "rp",
-                  "EFWdiff",
-                  "lagEFW", "lag_IM", "lag_con_int", "lag_rp",
-                  "laghc", "laglngdppc", "laggdpc_5growth",
-                  "lagfertilrate", "lagoldagedep", "lagpolity2", "lagurbanpop")
-
-sumstats <- alldata %>%
-  dplyr::select(dplyr::all_of(sumstat_vars)) %>%
-  summarise(across(everything(),
-                   list(Mean = ~mean(., na.rm = TRUE),
-                        SD   = ~sd(.,   na.rm = TRUE),
-                        Min  = ~min(.,  na.rm = TRUE),
-                        Max  = ~max(.,  na.rm = TRUE)),
-                   .names = "{.col}__{.fn}")) %>%
-  pivot_longer(everything(),
-               names_to  = c("Variable", ".value"),
-               names_sep = "__") %>%
-  mutate(across(where(is.numeric), ~round(., 3)))
-
-
-# =============================================================================
-# Part 5: PSM helper functions  (extended for the 8-test framework)
-#
-#   New parameters compared with the prior version:
-#     dq_covar         -- character; if non-NULL, the data-quality proxy column
-#                         (lag_con_int or lag_rp) added to the PS covariate set
-#     control_filter   -- character; if non-NULL, drop observations from the
-#                         control pool (treatment == 0) where this column == 1.
-#                         Used to remove deliberalizers (EFWdrop == 1) from
-#                         the control group when treatment is EFWjump, and
-#                         vice versa. Treated units are never dropped.
-# =============================================================================
-
-# Base lag covariates -- always included (same set as Results_DecileGrowth5yr.R)
 base_covars <- c("lagEFW", "laghc", "laglngdppc", "laggdpc_5growth",
                  "laglngdppc2", "lagfertilrate", "lagoldagedep",
-                 "lagpolity2", "lagurbanpop")
+                 "lagpolity2", "lagurbanpop", "lag_IM")
+dq_vars <- c(con_int = "lag_con_int", rp = "lag_rp")
 
-psm_caliper <- 0.25   # standard deviations of propensity score
+# Analysis sample: every row usable by both the with- and without-DQ tests
+analysis_ok <- complete.cases(alldata[, c("change_IM", base_covars, unname(dq_vars))])
 
-# -----------------------------------------------------------------------------
-# ps_covars() -- build the covariate vector for a given test
-# -----------------------------------------------------------------------------
-ps_covars <- function(lag_outcome, dq_covar = NULL) {
-  c(base_covars, lag_outcome, dq_covar)
-}
+sumstat_vars <- c("change_IM", "infantmortality", "con_int", "rp", "EFWdiff",
+                  base_covars, unname(dq_vars))
+sumstats <- alldata[analysis_ok, ] %>%
+  dplyr::select(all_of(sumstat_vars)) %>%
+  summarise(across(everything(),
+                   list(Mean = ~mean(., na.rm = TRUE), SD = ~sd(., na.rm = TRUE),
+                        Min  = ~min(., na.rm = TRUE),  Max = ~max(., na.rm = TRUE)),
+                   .names = "{.col}__{.fn}")) %>%
+  pivot_longer(everything(), names_to = c("Variable", ".value"), names_sep = "__") %>%
+  mutate(across(where(is.numeric), ~ round(., 3)))
+write.csv(sumstats, file.path(tab_dir, "summary_statistics.csv"), row.names = FALSE)
 
-# -----------------------------------------------------------------------------
-# apply_control_filter() -- drop "opposite-direction" events from controls
-#   Removes ROWS where treatment == 0 AND control_filter == 1.
-#   Leaves treated rows (treatment == 1) untouched.
-# -----------------------------------------------------------------------------
-apply_control_filter <- function(data, treatment, control_filter) {
-  if (is.null(control_filter)) return(data)
-  drop_mask <- (data[[treatment]] %in% 0) & (data[[control_filter]] %in% 1)
-  data[!drop_mask, , drop = FALSE]
-}
 
-# -----------------------------------------------------------------------------
-# complete_data() -- listwise deletion + control-pool filtering
-# -----------------------------------------------------------------------------
-complete_data <- function(data, treatment, outcome, lag_outcome,
-                          dq_covar = NULL, control_filter = NULL) {
-  data <- as.data.frame(data)
-  data <- apply_control_filter(data, treatment, control_filter)
-  vars <- c(treatment, outcome, ps_covars(lag_outcome, dq_covar))
-  data[complete.cases(data[, vars]), ]
-}
+# =============================================================================
+# Part 3: Estimators
+# =============================================================================
 
-# -----------------------------------------------------------------------------
-# run_psm_nn3() -- logit PS, 3 NN, caliper = 0.25 SDs
-# -----------------------------------------------------------------------------
-run_psm_nn3 <- function(data, treatment, outcome, lag_outcome,
-                        dq_covar = NULL, control_filter = NULL) {
-  df   <- complete_data(data, treatment, outcome, lag_outcome,
-                        dq_covar, control_filter)
-  vars <- ps_covars(lag_outcome, dq_covar)
-  ps_formula <- as.formula(paste(treatment, "~", paste(vars, collapse = " + ")))
-  ps <- fitted(glm(ps_formula, data = df, family = binomial(link = "logit")))
-
-  m_out <- Match(
-    Y = df[[outcome]], Tr = df[[treatment]], X = ps,
-    M = 3, estimand = "ATT", caliper = psm_caliper,
-    CommonSupport = TRUE, replace = FALSE
-  )
-  list(match = m_out, ps_formula = ps_formula, df = df, vars = vars)
-}
-
-# -----------------------------------------------------------------------------
-# run_psm_kernel() -- Epanechnikov kernel
-# -----------------------------------------------------------------------------
-run_psm_kernel <- function(data, treatment, outcome, lag_outcome,
-                           dq_covar = NULL, control_filter = NULL) {
-  df   <- complete_data(data, treatment, outcome, lag_outcome,
-                        dq_covar, control_filter)
-  vars <- ps_covars(lag_outcome, dq_covar)
-  ps_formula <- as.formula(paste(treatment, "~", paste(vars, collapse = " + ")))
-  ps <- fitted(glm(ps_formula, data = df, family = binomial(link = "logit")))
-
-  m_out <- Match(
-    Y = df[[outcome]], Tr = df[[treatment]], X = ps,
-    M = 1, estimand = "ATT", caliper = psm_caliper,
-    Weight = 2, CommonSupport = TRUE
-  )
-  list(match = m_out, ps_formula = ps_formula, df = df, vars = vars)
-}
-
-# -----------------------------------------------------------------------------
-# run_mah_nn3() -- Mahalanobis NN3 with Abadie-Imbens bias adjustment
-# -----------------------------------------------------------------------------
-run_mah_nn3 <- function(data, treatment, outcome, lag_outcome,
-                        dq_covar = NULL, control_filter = NULL) {
-  df   <- complete_data(data, treatment, outcome, lag_outcome,
-                        dq_covar, control_filter)
-  vars <- ps_covars(lag_outcome, dq_covar)
-  X    <- as.matrix(df[, vars])
-  Match(
-    Y = df[[outcome]], Tr = df[[treatment]], X = X,
-    M = 3, estimand = "ATT",
-    Weight = 2, BiasAdjust = TRUE, replace = TRUE
-  )
-}
-
-# -----------------------------------------------------------------------------
-# bootstrap_att() -- 200-rep bootstrap. Seed: 50826
-# -----------------------------------------------------------------------------
-bootstrap_att <- function(data, treatment, outcome, lag_outcome,
-                          dq_covar = NULL, control_filter = NULL,
-                          method = "nn3", B = 200) {
-  df   <- complete_data(data, treatment, outcome, lag_outcome,
-                        dq_covar, control_filter)
-  vars <- ps_covars(lag_outcome, dq_covar)
-  ps_formula <- as.formula(paste(treatment, "~", paste(vars, collapse = " + ")))
-
-  stat_fn <- function(d, idx) {
-    d_b  <- d[idx, ]
-    ps_b <- tryCatch(
-      fitted(glm(ps_formula, data = d_b, family = binomial())),
-      error = function(e) return(NA_real_)
-    )
-    if (all(is.na(ps_b))) return(NA_real_)
-
-    m_b <- tryCatch({
-      if (method == "nn3") {
-        Match(Y = d_b[[outcome]], Tr = d_b[[treatment]], X = ps_b,
-              M = 3, estimand = "ATT", caliper = psm_caliper,
-              CommonSupport = TRUE, replace = FALSE)
-      } else {
-        Match(Y = d_b[[outcome]], Tr = d_b[[treatment]], X = ps_b,
-              M = 1, estimand = "ATT", caliper = psm_caliper,
-              Weight = 2, CommonSupport = TRUE)
-      }
-    }, error = function(e) NULL)
-
-    if (is.null(m_b)) NA_real_ else as.numeric(m_b$est)
+# Build the sample for one test: treated + control rows, control filter
+# applied to controls only, complete on every covariate any proxy needs.
+test_sample <- function(data, treatment, control_filter = NULL) {
+  df <- as.data.frame(data[analysis_ok, ])
+  df <- df[!is.na(df[[treatment]]), ]
+  if (!is.null(control_filter)) {
+    drop <- df[[treatment]] == 0 & df[[control_filter]] %in% 1
+    df <- df[!drop, ]
   }
-
-  set.seed(50826)
-  boot(data = df, statistic = stat_fn, R = B)
+  df
 }
 
-# -----------------------------------------------------------------------------
-# extract_row() -- clean results row, robust to NULL match objects and
-#                  zero-length analytic SE (Match() with replace=FALSE)
-# -----------------------------------------------------------------------------
-extract_row <- function(est_label, m_obj, bstrap = NULL) {
-  if (is.null(m_obj)) {
-    return(data.frame(
-      Estimator = est_label, N_treated = NA_integer_,
-      ATT = NA_real_, SE = NA_real_, p_value = NA_real_,
-      CI_lo = NA_real_, CI_hi = NA_real_, stringsAsFactors = FALSE))
+ps_fit <- function(df, treatment, covars) {
+  f <- as.formula(paste(treatment, "~", paste(covars, collapse = " + ")))
+  suppressWarnings(fitted(glm(f, data = df, family = binomial(link = "logit"))))
+}
+
+# PSM, 3 nearest neighbours on the logit propensity score, with replacement,
+# caliper 0.25 SD, common support (psmatch2 n(3) common analogue)
+att_nn3 <- function(df, treatment, covars, ps = NULL) {
+  if (is.null(ps)) ps <- ps_fit(df, treatment, covars)
+  m <- tryCatch(Match(Y = df$change_IM, Tr = df[[treatment]], X = ps, M = 3,
+                      estimand = "ATT", caliper = psm_caliper, replace = TRUE,
+                      CommonSupport = TRUE),
+                error = function(e) NULL)
+  if (is.null(m) || length(m$est) == 0) return(list(att = NA_real_, m = NULL))
+  list(att = as.numeric(m$est), m = m)
+}
+
+# PSM, Epanechnikov kernel (psmatch2 kernel common, bandwidth 0.06)
+att_kernel <- function(df, treatment, covars, ps = NULL) {
+  if (is.null(ps)) ps <- ps_fit(df, treatment, covars)
+  tr <- df[[treatment]] == 1
+  y  <- df$change_IM
+  ps_t <- ps[tr]; ps_c <- ps[!tr]; y_t <- y[tr]; y_c <- y[!tr]
+  on_support <- ps_t >= min(ps_c) & ps_t <= max(ps_c)
+  cf <- vapply(ps_t, function(p) {
+    u <- (ps_c - p) / kernel_bw
+    w <- ifelse(abs(u) < 1, 0.75 * (1 - u^2), 0)
+    if (sum(w) == 0) NA_real_ else sum(w * y_c) / sum(w)
+  }, numeric(1))
+  keep <- on_support & !is.na(cf)
+  list(att = mean(y_t[keep] - cf[keep]), n_treated = sum(keep))
+}
+
+# Mahalanobis NN3 with Abadie-Imbens bias adjustment and analytic SE
+# (teffects nnmatch ... biasadj analogue)
+att_mah <- function(df, treatment, covars) {
+  m <- tryCatch(Match(Y = df$change_IM, Tr = df[[treatment]],
+                      X = as.matrix(df[, covars]), M = 3, estimand = "ATT",
+                      Weight = 2, BiasAdjust = TRUE, replace = TRUE),
+                error = function(e) NULL)
+  if (is.null(m)) return(list(att = NA_real_, se = NA_real_, n = NA_integer_))
+  list(att = as.numeric(m$est), se = as.numeric(m$se),
+       n = length(unique(m$index.treated)))
+}
+
+# Point estimates for every proxy setting ("none", "con_int", "rp") on one sample
+spec_names <- c(none = "No DQ control", con_int = "DQ control: con_int",
+                rp = "DQ control: rp")
+covars_for <- function(spec) if (spec == "none") base_covars else
+  c(base_covars, dq_vars[[spec]])
+
+estimate_all <- function(df, treatment, with_mah = TRUE) {
+  out <- list()
+  for (s in names(spec_names)) {
+    cv <- covars_for(s)
+    ps <- ps_fit(df, treatment, cv)
+    nn <- att_nn3(df, treatment, cv, ps)
+    kn <- att_kernel(df, treatment, cv, ps)
+    out[[s]] <- list(nn3 = nn$att, kernel = kn$att,
+                     nn3_ntr = if (!is.null(nn$m)) length(unique(nn$m$index.treated)) else NA,
+                     kernel_ntr = kn$n_treated, nn3_match = nn$m, ps = ps)
+    if (with_mah) out[[s]]$mah <- att_mah(df, treatment, cv)
   }
-  att    <- as.numeric(m_obj$est)
-  se_raw <- if (!is.null(bstrap)) sd(bstrap$t, na.rm = TRUE) else m_obj$se
-  se     <- if (length(se_raw) == 0 || is.null(se_raw)) NA_real_
-            else as.numeric(se_raw)
-  n_tr   <- if (!is.null(m_obj$index.treated))
-              length(unique(m_obj$index.treated)) else NA_integer_
-  pval   <- if (is.na(se) || se == 0) NA_real_ else 2 * pnorm(-abs(att / se))
-  ci_lo  <- if (is.na(se)) NA_real_ else att - 1.96 * se
-  ci_hi  <- if (is.na(se)) NA_real_ else att + 1.96 * se
-  data.frame(
-    Estimator = est_label, N_treated = as.integer(n_tr),
-    ATT = round(att, 4), SE = round(se, 4),
-    p_value = round(pval, 4),
-    CI_lo = round(ci_lo, 4), CI_hi = round(ci_hi, 4),
-    stringsAsFactors = FALSE)
+  out
+}
+
+# Country-clustered bootstrap: resample countries with replacement, re-run
+# NN3 and kernel for all three specs on the same draw.
+cluster_boot <- function(df, treatment, B = B_BOOT) {
+  countries <- unique(df$country)
+  idx_by_c  <- split(seq_len(nrow(df)), df$country)
+  set.seed(SEED)
+  res <- matrix(NA_real_, B, 6,
+                dimnames = list(NULL, paste(rep(names(spec_names), each = 2),
+                                            c("nn3", "kernel"), sep = ".")))
+  for (b in seq_len(B)) {
+    draw <- sample(countries, length(countries), replace = TRUE)
+    db <- df[unlist(idx_by_c[draw], use.names = FALSE), ]
+    if (sum(db[[treatment]] == 1) < 5) next
+    for (s in names(spec_names)) {
+      cv <- covars_for(s)
+      ps <- tryCatch(ps_fit(db, treatment, cv), error = function(e) NULL)
+      if (is.null(ps)) next
+      res[b, paste0(s, ".nn3")]    <- att_nn3(db, treatment, cv, ps)$att
+      res[b, paste0(s, ".kernel")] <- att_kernel(db, treatment, cv, ps)$att
+    }
+  }
+  res
 }
 
 
 # =============================================================================
-# Part 6: Run all 8 tests x 2 data-quality proxies
+# Part 4: Tests 1-8
 #
-#   Test grid (per Analysis 5.8.2026.txt and Vincent Notes.pdf):
-#     Test 1: jump, NO data-quality control
-#     Test 2: jump, WITH data-quality control
-#     Test 3: jump, NO DQ, deliberalizers (EFWdrop) removed from controls
-#     Test 4: jump, WITH DQ, deliberalizers removed from controls
-#     Test 5: drop, NO data-quality control
-#     Test 6: drop, WITH data-quality control
-#     Test 7: drop, NO DQ, liberalizers (EFWjump) removed from controls
-#     Test 8: drop, WITH DQ, liberalizers removed from controls
+#   Test 1: jump, no DQ control            Test 5: drop, no DQ control
+#   Test 2: jump, DQ control               Test 6: drop, DQ control
+#   Test 3: jump, no DQ, deliberalizers    Test 7: drop, no DQ, liberalizers
+#           removed from control group             removed from control group
+#   Test 4: jump, DQ, deliberalizers       Test 8: drop, DQ, liberalizers
+#           removed                                removed
 #
-#   Each test runs 3 estimators (NN3 + bootstrap, Kernel + bootstrap, Mah NN3).
-#   Tests 1, 3, 5, 7 do NOT involve any DQ proxy and are computed once each;
-#   Tests 2, 4, 6, 8 are computed twice -- once per proxy.
+# Tests come in pairs that share a sample (1&2, 3&4, 5&6, 7&8). Each pair is
+# estimated once with all three settings (no DQ / con_int / rp), so Tests
+# 2, 4, 6, 8 have a con_int and an rp version, as in the May design.
 # =============================================================================
 
 test_grid <- list(
   list(num = 1, label = "Test 1: 1pt jump, no DQ control",
-       treatment = "EFWjump", control_filter = NULL,    use_dq = FALSE),
+       treatment = "EFWjump", control_filter = NULL,            use_dq = FALSE, pair = "A"),
   list(num = 2, label = "Test 2: 1pt jump, with DQ control",
-       treatment = "EFWjump", control_filter = NULL,    use_dq = TRUE),
+       treatment = "EFWjump", control_filter = NULL,            use_dq = TRUE,  pair = "A"),
   list(num = 3, label = "Test 3: 1pt jump, no DQ, deliberalizers removed",
-       treatment = "EFWjump", control_filter = "EFWdrop", use_dq = FALSE),
+       treatment = "EFWjump", control_filter = "delib_episode", use_dq = FALSE, pair = "B"),
   list(num = 4, label = "Test 4: 1pt jump, with DQ, deliberalizers removed",
-       treatment = "EFWjump", control_filter = "EFWdrop", use_dq = TRUE),
+       treatment = "EFWjump", control_filter = "delib_episode", use_dq = TRUE,  pair = "B"),
   list(num = 5, label = "Test 5: 1pt drop, no DQ control",
-       treatment = "EFWdrop", control_filter = NULL,    use_dq = FALSE),
+       treatment = "EFWdrop", control_filter = NULL,            use_dq = FALSE, pair = "C"),
   list(num = 6, label = "Test 6: 1pt drop, with DQ control",
-       treatment = "EFWdrop", control_filter = NULL,    use_dq = TRUE),
+       treatment = "EFWdrop", control_filter = NULL,            use_dq = TRUE,  pair = "C"),
   list(num = 7, label = "Test 7: 1pt drop, no DQ, liberalizers removed",
-       treatment = "EFWdrop", control_filter = "EFWjump", use_dq = FALSE),
+       treatment = "EFWdrop", control_filter = "lib_episode",   use_dq = FALSE, pair = "D"),
   list(num = 8, label = "Test 8: 1pt drop, with DQ, liberalizers removed",
-       treatment = "EFWdrop", control_filter = "EFWjump", use_dq = TRUE)
+       treatment = "EFWdrop", control_filter = "lib_episode",   use_dq = TRUE,  pair = "D")
 )
 
-# Run one test (a single (treatment, dq_covar, control_filter) combination)
-# and return a data.frame with one row per estimator.
-run_one_test <- function(tspec, dq_covar = NULL) {
-  tvar <- tspec$treatment
-  cf   <- tspec$control_filter
-
-  # Pre-flight check: enough treated units after filtering?
-  df_check  <- complete_data(alldata, tvar, "change_IM", "lag_IM",
-                             dq_covar, cf)
-  n_treated <- sum(df_check[[tvar]] == 1, na.rm = TRUE)
-  if (n_treated < 5) {
-    cat(sprintf("    %s: only %d treated -- skipping.\n",
-                tspec$label, n_treated))
-    return(NULL)
-  }
-
-  cat(sprintf("    %s\n", tspec$label))
-  cat(sprintf("      Complete cases: %d  Treated: %d  Controls: %d  ",
-              nrow(df_check), n_treated, nrow(df_check) - n_treated))
-  if (!is.null(dq_covar))   cat(sprintf("DQ=%s  ", dq_covar))
-  if (!is.null(cf))         cat(sprintf("CF=%s  ", cf))
-  cat("\n")
-
-  nn3_fit  <- tryCatch(run_psm_nn3   (alldata, tvar, "change_IM", "lag_IM",
-                                      dq_covar, cf), error = function(e) NULL)
-  boot_nn3 <- if (!is.null(nn3_fit))
-    tryCatch(bootstrap_att(alldata, tvar, "change_IM", "lag_IM",
-                           dq_covar, cf, method = "nn3", B = 200),
-             error = function(e) NULL) else NULL
-
-  kern_fit  <- tryCatch(run_psm_kernel(alldata, tvar, "change_IM", "lag_IM",
-                                       dq_covar, cf), error = function(e) NULL)
-  boot_kern <- if (!is.null(kern_fit))
-    tryCatch(bootstrap_att(alldata, tvar, "change_IM", "lag_IM",
-                           dq_covar, cf, method = "kernel", B = 200),
-             error = function(e) NULL) else NULL
-
-  mah_fit <- tryCatch(run_mah_nn3(alldata, tvar, "change_IM", "lag_IM",
-                                  dq_covar, cf), error = function(e) NULL)
-
-  bind_rows(
-    extract_row("PSM NN3",              if (!is.null(nn3_fit))  nn3_fit$match  else NULL, boot_nn3),
-    extract_row("PSM Kernel",           if (!is.null(kern_fit)) kern_fit$match else NULL, boot_kern),
-    extract_row("Mahalanobis NN3 (BA)", mah_fit, NULL)
-  )
-}
-
-# Storage:  results_by_proxy[[proxy]][[test_num]] -> data.frame
-results_by_proxy <- list("con_int" = list(), "rp" = list())
-
-cat("\n", strrep("=", 70), "\n", sep = "")
-cat(" Running 8-test framework x 2 DQ proxies (con_int and rp)\n")
-cat(strrep("=", 70), "\n", sep = "")
-
-for (proxy in c("con_int", "rp")) {
-  cat(sprintf("\n--- Data-quality proxy: %s ---\n", proxy))
-  proxy_var <- if (proxy == "con_int") "lag_con_int" else "lag_rp"
-
-  for (tspec in test_grid) {
-    dq_covar <- if (tspec$use_dq) proxy_var else NULL
-    res <- run_one_test(tspec, dq_covar)
-    results_by_proxy[[proxy]][[as.character(tspec$num)]] <- res
-  }
-}
-
-
-# =============================================================================
-# Part 7: Balance and distribution plots (PSM NN3 specification)
-#   For each of the 8 tests x each DQ proxy, produce a PS-density plot and a
-#   Love plot. With 16 test x proxy combinations, this is 32 figures total.
-# =============================================================================
-
-fig_dir <- "Code/Figures"
-if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
-
-smd_fn <- function(x, treat) {
-  x_t <- x[treat == 1]; x_c <- x[treat == 0]
-  m_diff <- mean(x_t, na.rm = TRUE) - mean(x_c, na.rm = TRUE)
-  s_pool <- sqrt((var(x_t, na.rm = TRUE) + var(x_c, na.rm = TRUE)) / 2)
-  if (is.na(s_pool) || s_pool == 0) return(NA_real_)
-  m_diff / s_pool
-}
-
-make_balance_plots <- function(fit, tlabel, tvar, lag_outcome,
-                               dq_covar = NULL) {
-  if (is.null(fit) || is.null(fit$match$index.treated)) return(NULL)
-
-  df <- fit$df
-  ps <- fitted(glm(fit$ps_formula, data = df, family = binomial(link = "logit")))
-  df$PS <- ps
-  df$Treatment <- factor(df[[tvar]], levels = c(0, 1),
-                         labels = c("Control", "Treated"))
-
-  treated_ix <- fit$match$index.treated
-  control_ix <- fit$match$index.control
-  matched_df <- rbind(df[treated_ix, , drop = FALSE],
-                      df[control_ix, , drop = FALSE])
-  matched_df$Treatment <- factor(
-    c(rep(1L, length(treated_ix)), rep(0L, length(control_ix))),
-    levels = c(0, 1), labels = c("Control", "Treated"))
-
-  df$Stage         <- "Before matching"
-  matched_df$Stage <- "After matching"
-  ps_long <- rbind(df[, c("PS", "Treatment", "Stage")],
-                   matched_df[, c("PS", "Treatment", "Stage")])
-  ps_long$Stage <- factor(ps_long$Stage,
-                          levels = c("Before matching", "After matching"))
-
-  p_ps <- ggplot(ps_long, aes(x = PS, fill = Treatment)) +
-    geom_density(alpha = 0.5) +
-    facet_wrap(~ Stage, ncol = 2) +
-    scale_fill_manual(values = c("Control" = "#377EB8", "Treated" = "#E41A1C")) +
-    labs(title    = sprintf("Propensity-score distribution: %s", tlabel),
-         x = "Propensity score", y = "Density") +
-    theme_bw() +
-    theme(plot.title = element_text(face = "bold"),
-          legend.position = "bottom")
-
-  covars     <- ps_covars(lag_outcome, dq_covar)
-  smd_before <- vapply(covars, function(v) smd_fn(df[[v]], df[[tvar]]),
-                       numeric(1))
-  smd_after  <- vapply(covars,
-                       function(v) smd_fn(matched_df[[v]],
-                                          as.integer(matched_df$Treatment) - 1L),
-                       numeric(1))
-  love_df <- data.frame(
-    Covariate = factor(rep(covars, 2), levels = rev(covars)),
-    SMD       = c(smd_before, smd_after),
-    Stage     = factor(rep(c("Before matching", "After matching"),
-                           each = length(covars)),
-                       levels = c("Before matching", "After matching"))
-  )
-  p_love <- ggplot(love_df, aes(x = SMD, y = Covariate,
-                                color = Stage, shape = Stage)) +
-    geom_vline(xintercept = 0,           color = "gray40") +
-    geom_vline(xintercept = c(-0.1, 0.1),
-               linetype = "dashed", color = "gray60") +
-    geom_point(size = 3) +
-    scale_color_manual(name = NULL,
-                       values = c("Before matching" = "#E41A1C",
-                                  "After matching"  = "#377EB8")) +
-    scale_shape_manual(name = NULL,
-                       values = c("Before matching" = 16,
-                                  "After matching"  = 17)) +
-    labs(title = sprintf("Covariate balance: %s", tlabel),
-         subtitle = "|SMD| < 0.10 = well balanced",
-         x = "Standardized mean difference (treated - control)", y = NULL) +
-    theme_bw() +
-    theme(plot.title = element_text(face = "bold"),
-          legend.position = "bottom")
-
-  list(ps_density = p_ps, love = p_love)
-}
-
-balance_plots <- list("con_int" = list(), "rp" = list())
-
-for (proxy in c("con_int", "rp")) {
-  proxy_var <- if (proxy == "con_int") "lag_con_int" else "lag_rp"
-
-  for (tspec in test_grid) {
-    dq_covar <- if (tspec$use_dq) proxy_var else NULL
-    fit <- tryCatch(
-      run_psm_nn3(alldata, tspec$treatment, "change_IM", "lag_IM",
-                  dq_covar, tspec$control_filter),
-      error = function(e) NULL)
-    if (is.null(fit) || is.null(fit$match$index.treated)) next
-
-    plots <- make_balance_plots(fit, tspec$label, tspec$treatment,
-                                "lag_IM", dq_covar)
-    if (is.null(plots)) next
-
-    stub <- gsub("[^A-Za-z0-9]+", "_",
-                 paste("Test", tspec$num, proxy, sep = "_"))
-    ggsave(file.path(fig_dir, paste0(stub, "_PS_density.png")),
-           plots$ps_density, width = 9, height = 4.5, dpi = 150)
-    ggsave(file.path(fig_dir, paste0(stub, "_Love_plot.png")),
-           plots$love, width = 7, height = 5, dpi = 150)
-
-    balance_plots[[proxy]][[as.character(tspec$num)]] <- plots
-  }
-}
-
-
-# =============================================================================
-# Part 8: Save outputs for Quarto rendering
-# =============================================================================
-
-quarto_data <- list(
-  alldata          = alldata,
-  tbl_EFWjump      = tbl_EFWjump,
-  tbl_EFWdrop      = tbl_EFWdrop,
-  sumstats         = sumstats,
-  results_by_proxy = results_by_proxy,
-  balance_plots    = balance_plots,
-  test_grid        = test_grid
+pairs <- list(
+  A = list(treatment = "EFWjump", control_filter = NULL,            tests = c(1, 2)),
+  B = list(treatment = "EFWjump", control_filter = "delib_episode", tests = c(3, 4)),
+  C = list(treatment = "EFWdrop", control_filter = NULL,            tests = c(5, 6)),
+  D = list(treatment = "EFWdrop", control_filter = "lib_episode",   tests = c(7, 8)),
+  # Country-level sensitivity: drop every country that EVER moved the other way
+  B_country = list(treatment = "EFWjump", control_filter = "ever_delib", tests = c(3, 4)),
+  D_country = list(treatment = "EFWdrop", control_filter = "ever_lib",   tests = c(7, 8))
 )
 
-saveRDS(quarto_data, "Code/analysis_results.rds")
-cat("\nAll results saved to Code/analysis_results.rds\n")
+pair_results <- list()
+for (p in names(pairs)) {
+  pr <- pairs[[p]]
+  df <- test_sample(alldata, pr$treatment, pr$control_filter)
+  cat(sprintf("\nPair %s (%s, filter = %s): %d rows, %d treated, %d controls\n",
+              p, pr$treatment, ifelse(is.null(pr$control_filter), "none",
+                                      pr$control_filter),
+              nrow(df), sum(df[[pr$treatment]] == 1), sum(df[[pr$treatment]] == 0)))
+  est  <- estimate_all(df, pr$treatment)
+  boot <- cluster_boot(df, pr$treatment)
+  pair_results[[p]] <- list(df = df, est = est, boot = boot,
+                            n_obs = nrow(df), n_treated = sum(df[[pr$treatment]] == 1),
+                            n_countries = length(unique(df$country)))
+}
+
+# ---- Tidy ATT table: one row per pair x spec x estimator -------------------
+stars <- function(p) ifelse(is.na(p), "", ifelse(p < .01, "***",
+                     ifelse(p < .05, "**", ifelse(p < .1, "*", ""))))
+
+att_rows <- list()
+for (p in names(pairs)) {
+  r <- pair_results[[p]]
+  for (s in names(spec_names)) {
+    e <- r$est[[s]]
+    for (k in c("nn3", "kernel")) {
+      draws <- r$boot[, paste0(s, ".", k)]
+      se <- sd(draws, na.rm = TRUE)
+      att <- e[[k]]
+      att_rows[[length(att_rows) + 1]] <- data.frame(
+        pair = p, spec = s,
+        estimator = c(nn3 = "PSM NN3", kernel = "PSM Kernel")[[k]],
+        n_treated = c(nn3 = e$nn3_ntr, kernel = e$kernel_ntr)[[k]],
+        att = att, se = se, p_value = 2 * pnorm(-abs(att / se)),
+        boot_ok = sum(!is.na(draws)))
+    }
+    att_rows[[length(att_rows) + 1]] <- data.frame(
+      pair = p, spec = s, estimator = "Mahalanobis NN3 (BA)",
+      n_treated = e$mah$n, att = e$mah$att, se = e$mah$se,
+      p_value = 2 * pnorm(-abs(e$mah$att / e$mah$se)), boot_ok = NA)
+  }
+}
+att_table <- bind_rows(att_rows) %>%
+  mutate(test = mapply(function(p, s) pairs[[p]]$tests[if (s == "none") 1 else 2],
+                       pair, spec),
+         ci_lo = att - 1.96 * se, ci_hi = att + 1.96 * se,
+         stars = stars(p_value)) %>%
+  dplyr::select(pair, test, spec, estimator, n_treated, att, se, ci_lo, ci_hi,
+                p_value, stars, boot_ok)
+write.csv(att_table %>% mutate(across(where(is.numeric), ~ round(., 4))),
+          file.path(tab_dir, "att_all_tests.csv"), row.names = FALSE)
+
+# ---- Hidden gain: ATT(with DQ) - ATT(no DQ), same sample, paired draws ----
+hidden_rows <- list()
+for (p in names(pairs)) {
+  r <- pair_results[[p]]
+  for (s in c("con_int", "rp")) {
+    for (k in c("nn3", "kernel")) {
+      d_draw <- r$boot[, paste0(s, ".", k)] - r$boot[, paste0("none.", k)]
+      diff <- r$est[[s]][[k]] - r$est$none[[k]]
+      se <- sd(d_draw, na.rm = TRUE)
+      hidden_rows[[length(hidden_rows) + 1]] <- data.frame(
+        pair = p, proxy = s,
+        estimator = c(nn3 = "PSM NN3", kernel = "PSM Kernel")[[k]],
+        att_no_dq = r$est$none[[k]], att_dq = r$est[[s]][[k]],
+        hidden = diff, se = se,
+        ci_lo = quantile(d_draw, .025, na.rm = TRUE),
+        ci_hi = quantile(d_draw, .975, na.rm = TRUE),
+        p_value = 2 * pnorm(-abs(diff / se)))
+    }
+    hidden_rows[[length(hidden_rows) + 1]] <- data.frame(
+      pair = p, proxy = s, estimator = "Mahalanobis NN3 (BA)",
+      att_no_dq = r$est$none$mah$att, att_dq = r$est[[s]]$mah$att,
+      hidden = r$est[[s]]$mah$att - r$est$none$mah$att,
+      se = NA, ci_lo = NA, ci_hi = NA, p_value = NA)
+  }
+}
+hidden_table <- bind_rows(hidden_rows) %>%
+  mutate(pct_change = 100 * hidden / abs(att_no_dq))
+rownames(hidden_table) <- NULL
+write.csv(hidden_table %>% mutate(across(where(is.numeric), ~ round(., 4))),
+          file.path(tab_dir, "hidden_gain.csv"), row.names = FALSE)
+
+
+# ---- Regression check: OLS with year fixed effects, country-clustered SE ---
+# Same samples as Tests 1/2 and 5/6. Matching does not use the period, while
+# IMR declines differ a lot by decade, so this shows the comparison holds once
+# each episode is compared only with country-years from the same period.
+library(sandwich); library(lmtest)
+reg_rows <- list()
+for (p in c("A", "C")) {
+  df <- pair_results[[p]]$df; tr <- pairs[[p]]$treatment
+  for (s in names(spec_names)) {
+    f <- as.formula(paste("change_IM ~", tr, "+",
+                          paste(covars_for(s), collapse = " + "), "+ factor(year)"))
+    m  <- lm(f, data = df)
+    ct <- coeftest(m, vcov = vcovCL(m, cluster = ~ country))[tr, ]
+    reg_rows[[length(reg_rows) + 1]] <- data.frame(
+      treatment = tr, spec = s, n = nobs(m), coef = ct[1], se = ct[2],
+      p_value = ct[4])
+  }
+}
+reg_table <- bind_rows(reg_rows); rownames(reg_table) <- NULL
+write.csv(reg_table %>% mutate(across(where(is.numeric), ~ round(., 4))),
+          file.path(tab_dir, "regression_check.csv"), row.names = FALSE)
+
+
+# =============================================================================
+# Part 5: Data-quality balance (the mechanism)
+#   Standardized mean difference in lagged DQ between treated and controls:
+#   before matching, after NN3 matching WITHOUT the DQ control, and after NN3
+#   matching WITH it.
+# =============================================================================
+
+smd <- function(x_t, x_c) {
+  s <- sqrt((var(x_t) + var(x_c)) / 2)
+  if (is.na(s) || s == 0) NA_real_ else (mean(x_t) - mean(x_c)) / s
+}
+matched_smd <- function(df, m, v) {
+  if (is.null(m)) return(NA_real_)
+  smd(df[[v]][m$index.treated], df[[v]][m$index.control])
+}
+
+balance_rows <- list()
+for (p in c("A", "B", "C", "D")) {
+  r  <- pair_results[[p]]; df <- r$df; tr <- pairs[[p]]$treatment
+  for (s in c("con_int", "rp")) {
+    v <- dq_vars[[s]]
+    balance_rows[[length(balance_rows) + 1]] <- data.frame(
+      pair = p, proxy = s,
+      stage = c("Before matching", "Matched without DQ control",
+                "Matched with DQ control"),
+      smd = c(smd(df[[v]][df[[tr]] == 1], df[[v]][df[[tr]] == 0]),
+              matched_smd(df, r$est$none$nn3_match, v),
+              matched_smd(df, r$est[[s]]$nn3_match, v)))
+  }
+}
+balance_table <- bind_rows(balance_rows)
+write.csv(balance_table %>% mutate(smd = round(smd, 3)),
+          file.path(tab_dir, "dq_balance.csv"), row.names = FALSE)
+
+# Full Love-plot balance (all covariates) for each test, NN3, for the Quarto
+covar_balance <- function(df, tr, m, covars) {
+  data.frame(
+    Covariate = covars,
+    before = sapply(covars, function(v) smd(df[[v]][df[[tr]] == 1], df[[v]][df[[tr]] == 0])),
+    after  = sapply(covars, function(v) matched_smd(df, m, v)))
+}
+
+
+# =============================================================================
+# Part 6: Figures
+# =============================================================================
+
+col_none <- "#2a78d6"; col_ci <- "#eb6834"; col_rp <- "#1baf7a"
+ink <- "#0b0b0b"; ink2 <- "#52514e"; grid_col <- "#e4e3df"
+theme_paper <- theme_minimal(base_size = 11) +
+  theme(panel.grid.minor = element_blank(),
+        panel.grid.major = element_line(colour = grid_col, linewidth = 0.3),
+        axis.text = element_text(colour = ink2), axis.title = element_text(colour = ink),
+        plot.title = element_text(face = "bold", colour = ink),
+        plot.subtitle = element_text(colour = ink2),
+        strip.text = element_text(face = "bold", colour = ink, hjust = 0),
+        legend.position = "bottom", legend.title = element_blank(),
+        plot.title.position = "plot",
+        plot.background = element_rect(fill = "white", colour = NA))
+
+pair_lab <- c(A = "Liberalization (Tests 1-2)",
+              B = "Liberalization, deliberalizers out of control group (Tests 3-4)",
+              C = "Deliberalization (Tests 5-6)",
+              D = "Deliberalization, liberalizers out of control group (Tests 7-8)")
+
+# Figure 1: ATT by test, estimator and DQ setting
+f1 <- att_table %>% filter(pair %in% c("A", "B", "C", "D")) %>%
+  mutate(pair = factor(pair_lab[pair], levels = pair_lab),
+         spec = factor(spec_names[spec], levels = spec_names),
+         estimator = factor(estimator, levels = rev(c("PSM NN3", "PSM Kernel",
+                                                      "Mahalanobis NN3 (BA)"))))
+p1 <- ggplot(f1, aes(x = att, y = estimator, colour = spec)) +
+  geom_vline(xintercept = 0, colour = ink2, linewidth = 0.4) +
+  geom_errorbar(aes(xmin = ci_lo, xmax = ci_hi), width = 0, orientation = "y", linewidth = 0.6,
+                 position = position_dodge(width = 0.6)) +
+  geom_point(size = 2.4, position = position_dodge(width = 0.6)) +
+  facet_wrap(~ pair, ncol = 1) +
+  scale_colour_manual(values = c(col_none, col_ci, col_rp)) +
+  labs(title = "Effect of a 1-point EFW change on 5-year IMR change",
+       subtitle = "ATT in deaths per 1,000 live births with 95% CI.\nNegative = IMR fell faster than in matched controls.",
+       x = "ATT (change in IMR, per 1,000)", y = NULL) +
+  theme_paper
+ggsave(file.path(fig_dir, "fig1_att_by_test.png"), p1, width = 8.5, height = 8, dpi = 200)
+
+# Figure 2: hidden gain with bootstrap CI (NN3 and kernel)
+f2 <- hidden_table %>% filter(pair %in% c("A", "B", "C", "D"),
+                              estimator != "Mahalanobis NN3 (BA)") %>%
+  mutate(pair = factor(pair_lab[pair], levels = rev(pair_lab)),
+         estimator = factor(estimator, levels = c("PSM NN3", "PSM Kernel")),
+         proxy = factor(spec_names[proxy], levels = spec_names[2:3]))
+p2 <- ggplot(f2, aes(x = hidden, y = pair, colour = proxy)) +
+  geom_vline(xintercept = 0, colour = ink2, linewidth = 0.4) +
+  geom_errorbar(aes(xmin = ci_lo, xmax = ci_hi), width = 0, orientation = "y", linewidth = 0.6,
+                 position = position_dodge(width = 0.5)) +
+  geom_point(size = 2.4, position = position_dodge(width = 0.5)) +
+  facet_wrap(~ estimator, nrow = 1) +
+  scale_colour_manual(values = c(col_ci, col_rp)) +
+  scale_y_discrete(labels = function(x) gsub(" \\(", "\n(", x)) +
+  labs(title = "How much does the data-quality control move the ATT?",
+       subtitle = "ATT with DQ control minus ATT without, same sample, 95% country-cluster bootstrap CI.\nFor liberalizations, negative = the control reveals a larger IMR decline (hidden gains).",
+       x = "Change in ATT (per 1,000)", y = NULL) +
+  theme_paper
+ggsave(file.path(fig_dir, "fig2_hidden_gain.png"), p2, width = 9, height = 5, dpi = 200)
+
+# Figure 3: DQ balance before/after matching
+f3 <- balance_table %>%
+  mutate(pair = factor(pair_lab[pair], levels = rev(pair_lab)),
+         stage = factor(stage, levels = c("Before matching",
+                                          "Matched without DQ control",
+                                          "Matched with DQ control")),
+         proxy = paste("Lagged", ifelse(proxy == "con_int",
+                                        "interval width (con_int)",
+                                        "relative precision (rp)")))
+p3 <- ggplot(f3, aes(x = smd, y = pair, colour = stage, shape = stage)) +
+  annotate("rect", xmin = -0.1, xmax = 0.1, ymin = -Inf, ymax = Inf,
+           fill = "#f1f0ec") +
+  geom_vline(xintercept = 0, colour = ink2, linewidth = 0.4) +
+  geom_point(size = 2.8) +
+  facet_wrap(~ proxy, nrow = 1) +
+  scale_colour_manual(values = c("#52514e", col_none, col_ci)) +
+  scale_shape_manual(values = c(16, 17, 15)) +
+  scale_y_discrete(labels = function(x) gsub(" \\(", "\n(", x)) +
+  labs(title = "Data quality of treated vs. control country-years",
+       subtitle = "Standardized mean difference in lagged data quality, treated minus control.\nShaded band = |SMD| < 0.1. Positive = treated were measured less precisely.",
+       x = "Standardized mean difference", y = NULL) +
+  theme_paper
+ggsave(file.path(fig_dir, "fig3_dq_balance.png"), p3, width = 9, height = 5, dpi = 200)
+
+# Figure 4: how the two DQ proxies relate to the IMR level
+f4 <- alldata[analysis_ok, ] %>%
+  mutate(group = case_when(EFWjump %in% 1 ~ "Liberalization episode",
+                           EFWdrop %in% 1 ~ "Deliberalization episode",
+                           TRUE ~ "Other country-years"),
+         group = factor(group, levels = c("Other country-years",
+                                          "Liberalization episode",
+                                          "Deliberalization episode"))) %>%
+  dplyr::select(country, year, group, lag_IM, lag_con_int, lag_rp) %>%
+  pivot_longer(c(lag_con_int, lag_rp), names_to = "proxy", values_to = "value") %>%
+  mutate(proxy = ifelse(proxy == "lag_con_int",
+                        "Interval width, con_int (per 1,000)",
+                        "Relative precision, rp (half-width / IMR)"))
+p4 <- ggplot(f4, aes(x = lag_IM, y = value)) +
+  geom_point(data = ~ filter(.x, group == "Other country-years"),
+             colour = "#c3c2b7", size = 1.1, alpha = 0.7) +
+  geom_point(data = ~ filter(.x, group != "Other country-years"),
+             aes(colour = group), size = 2, alpha = 0.95) +
+  facet_wrap(~ proxy, nrow = 1, scales = "free_y") +
+  scale_x_log10() + scale_y_log10() +
+  scale_colour_manual(values = c(col_none, col_ci)) +
+  labs(title = "Data quality and the level of infant mortality",
+       subtitle = "Lagged values, log scales. Grey = country-years with no qualifying EFW change.",
+       x = "Lagged IMR (per 1,000, log scale)", y = NULL) +
+  theme_paper
+ggsave(file.path(fig_dir, "fig4_dq_vs_imr.png"), p4, width = 9, height = 4.3, dpi = 200)
+
+# Copy the figures to the website folder (docs/, published by GitHub Pages)
+docs_fig_dir <- file.path(root, "docs", "figures")
+dir.create(docs_fig_dir, recursive = TRUE, showWarnings = FALSE)
+file.copy(list.files(fig_dir, pattern = "\\.png$", full.names = TRUE),
+          docs_fig_dir, overwrite = TRUE)
+
+
+# =============================================================================
+# Part 7: Objects for the IM_Lib_Int Quarto documents
+#   results_by_proxy[[proxy]][[test]] keeps the May layout (one data.frame per
+#   test with Estimator, N_treated, ATT, SE, p_value, CI_lo, CI_hi).
+# =============================================================================
+
+to_test_df <- function(p, s) {
+  att_table %>% filter(pair == p, spec == s) %>%
+    transmute(Estimator = estimator, N_treated = as.integer(n_treated),
+              ATT = round(att, 4), SE = round(se, 4), p_value = round(p_value, 4),
+              CI_lo = round(ci_lo, 4), CI_hi = round(ci_hi, 4))
+}
+results_by_proxy <- list(con_int = list(), rp = list())
+for (proxy in c("con_int", "rp")) {
+  for (t in test_grid) {
+    s <- if (t$use_dq) proxy else "none"
+    results_by_proxy[[proxy]][[as.character(t$num)]] <- to_test_df(t$pair, s)
+  }
+}
+
+saveRDS(list(
+  alldata = alldata, tbl_EFWjump = tbl_EFWjump, tbl_EFWdrop = tbl_EFWdrop,
+  sumstats = sumstats, results_by_proxy = results_by_proxy,
+  att_table = att_table, hidden_table = hidden_table,
+  balance_table = balance_table, reg_table = reg_table,
+  flag_compare = flag_compare,
+  pair_n = sapply(pair_results, function(r) c(obs = r$n_obs, treated = r$n_treated,
+                                               countries = r$n_countries)),
+  test_grid = test_grid, fig_dir = fig_dir
+), file.path(root, "Code", "analysis_results.rds"))
+
+cat("\nDone. Tables in Results/tables, figures in Results/figures,\n",
+    "Quarto inputs in Code/analysis_results.rds\n")
