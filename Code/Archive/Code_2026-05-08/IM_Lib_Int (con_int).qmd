@@ -95,39 +95,27 @@ sumstats %>%
       digits = 3, booktabs = TRUE) %>%
   kable_styling(full_width = FALSE, position = "left",
                 bootstrap_options = c("striped", "hover", "condensed")) %>%
-  pack_rows("Outcome and IMR level",           1, 2) %>%
-  pack_rows("Data-quality proxies",            3, 4) %>%
-  pack_rows("EFW change variable",             5, 5) %>%
-  pack_rows("Matching covariates",             6, 15) %>%
-  pack_rows("Data-quality controls (lagged)", 16, 17)
+  pack_rows("Outcome variable",     1, 1) %>%
+  pack_rows("Data-quality proxies", 2, 3) %>%
+  pack_rows("EFW change variable",  4, 4) %>%
+  pack_rows("PSM covariates",       5, 15)
 ```
 
 
 # Treatment Definitions and Episodes
 
 We identify two treatment events in a 5-year quinquennial panel from
-1970 to 2015. The raw score changes come from `1) Import_Merge.R`; the
-flags are rebuilt in `2) Analysis.R` (see below).
+1970 to 2015. Both are constructed in `1) Import_Merge.R`.
 
 | Treatment | Definition | Interpretation |
 |:----------|:-----------|:---------------|
 | **EFW Score Jump** | EFW index rose $\geq +1.0$ point over 5 years | **Liberalization** |
 | **EFW Score Drop** | EFW index fell $\leq -1.0$ point over 5 years | **Deliberalization** (restriction) |
 
-Episodes are blanked with Callais & Young's (2023) Stata sequence: a
-country-year is set to NA if the previous 5-year period was an episode,
-then if the period 10 years earlier was, then if the next period is. Because
-Stata applies each rule row by row, the *first* episode of a sustained
-reform is kept and the follow-on periods are dropped; the May 2026 version
-dropped both and lost every sustained reformer's first episode. Venezuela
-2000 is excluded as in Callais & Young.
-
-```{r flag-compare}
-flag_compare %>%
-  kbl(caption = "Episode counts: May 2026 flags vs. revised flags",
-      col.names = c("Flag", "May 2026", "Revised"), booktabs = TRUE) %>%
-  kable_styling(full_width = FALSE, position = "left")
-```
+Observations adjacent to any qualifying event within the same country are
+set to NA (lag 1, lag 2, lead 1) to avoid contamination from overlapping
+reform episodes (Callais & Young 2023). Venezuela 2000 is excluded as a
+structural break.
 
 ::: {.callout-note}
 ## Rank-based treatments removed
@@ -173,29 +161,16 @@ interpretation.
 
 ### 1. PSM — 3 Nearest Neighbors (NN3)
 Logit propensity score → 3 nearest neighbors on the score, caliper of
-0.25 SDs, with replacement (as `psmatch2 ..., n(3)` does), common support.
-Country-clustered bootstrap SEs (200 reps, seed 50826).
+0.25 SDs, no replacement. Bootstrap SEs (200 reps, seed 12345).
 
 ### 2. PSM — Epanechnikov Kernel
-Same logit PS as NN3; each treated unit is compared with an
-Epanechnikov-weighted average of the controls within a bandwidth of 0.06
-(the `psmatch2` default), common support imposed. The May version called
-`Match(Weight = 2)`, which is Mahalanobis weighting rather than a kernel,
-so its "kernel" column was a second nearest-neighbour estimate.
-Country-clustered bootstrap SEs (200 reps).
+Same logit PS as NN3; each treated unit compared to a kernel-weighted
+average of all controls within the caliper. Bootstrap SEs (200 reps).
 
 ### 3. Mahalanobis NN3 with Bias Adjustment
 Skips the PS model. Each treated unit matched to its 3 nearest controls
 in the full covariate space using Mahalanobis distance, with
 Abadie-Imbens (2011) bias correction. Analytic SEs.
-
-## Same sample with and without the data-quality control
-
-Each pair of tests (1–2, 3–4, 5–6, 7–8) is run on one sample: country-years
-with a non-missing data-quality proxy. The difference between the two ATTs
-is therefore caused by adding the control, not by a change in sample.
-The bootstrap re-estimates both ATTs on each resample, which gives a
-standard error for that difference.
 
 ## Covariates
 
@@ -221,7 +196,7 @@ included as a control:
 # Results
 
 For each test we report ATT, SE, p-value and 95% CI from the three
-matching estimators. Country-clustered bootstrap SE (200 reps) for PSM NN3 and PSM Kernel;
+matching estimators. Bootstrap SE (200 reps) for PSM NN3 and PSM Kernel;
 Abadie-Imbens analytic SE for Mahalanobis. Stars: \* p<0.10, \*\* p<0.05,
 \*\*\* p<0.01.
 
@@ -252,7 +227,7 @@ render_test <- function(tspec, res) {
             align = c("l","r","r","r","r")) %>%
           kable_styling(full_width = FALSE, position = "left",
                         bootstrap_options = c("striped","hover","condensed")) %>%
-          footnote(general = "Country-clustered bootstrap SE (200 reps) for PSM NN3 and PSM Kernel; Abadie-Imbens SE for Mahalanobis. *** p<0.01, ** p<0.05, * p<0.10.",
+          footnote(general = "Bootstrap SE (200 reps) for PSM NN3 and PSM Kernel; Abadie-Imbens SE for Mahalanobis. *** p<0.01, ** p<0.05, * p<0.10.",
                    general_title = "Notes:", footnote_as_chunk = TRUE))
   cat("\n\n")
 }
@@ -273,50 +248,28 @@ for (n in 5:8) {
 ```
 
 
-# How much does data quality move the estimate?
+# Balance & Distribution Diagnostics
 
-The "hidden gain" is the ATT with the data-quality control minus the ATT
-without it, on the same sample. For liberalizations a **negative** value
-means the control reveals a larger decline in IMR (data quality was hiding
-gains); a **positive** value means part of the unadjusted gain was tied to
-how well the countries were measured.
+For each test, we show the propensity-score density (before vs after
+PSM NN3 matching) and a Love plot of standardized mean differences for
+every covariate in that test's PS model. Reference lines at $\pm 0.10$
+(Austin 2011) mark the conventional well-balanced threshold.
 
-```{r hidden-gain}
-hidden_table %>%
-  filter(proxy == PROXY, pair %in% c("A", "B", "C", "D")) %>%
-  mutate(Tests = c(A = "1 vs 2", B = "3 vs 4", C = "5 vs 6", D = "7 vs 8")[pair],
-         CI = ifelse(is.na(ci_lo), "", sprintf("[%.2f, %.2f]", ci_lo, ci_hi))) %>%
-  transmute(Tests, Estimator = estimator,
-            `ATT, no DQ` = round(att_no_dq, 2), `ATT, DQ` = round(att_dq, 2),
-            Difference = round(hidden, 2), `Bootstrap SE` = round(se, 2),
-            `95% CI` = CI) %>%
-  kbl(caption = "ATT with minus without the data-quality control", booktabs = TRUE) %>%
-  kable_styling(full_width = FALSE, position = "left",
-                bootstrap_options = c("striped", "hover", "condensed"))
+```{r balance-loop, results="asis", fig.width=9, fig.height=4.8}
+plots_for_proxy <- balance_plots[[PROXY]]
+
+for (n in 1:8) {
+  tspec <- test_grid[[n]]
+  plots <- plots_for_proxy[[as.character(n)]]
+  cat(sprintf("\n## %s {.unnumbered}\n\n", tspec$label))
+  if (is.null(plots)) {
+    cat("Balance plots unavailable (insufficient treated units).\n\n")
+    next
+  }
+  print(plots$ps_density); cat("\n")
+  print(plots$love);       cat("\n\n")
+}
 ```
-
-![](../Results/figures/fig2_hidden_gain.png)
-
-## Regression check (year fixed effects)
-
-```{r reg-check}
-reg_table %>%
-  filter(spec %in% c("none", PROXY)) %>%
-  transmute(Treatment = treatment,
-            Control = ifelse(spec == "none", "No DQ control", paste("DQ:", spec)),
-            N = n, Coefficient = round(coef, 3), `Clustered SE` = round(se, 3),
-            p = round(p_value, 3)) %>%
-  kbl(caption = "OLS of the 5-year IMR change on the treatment, matching covariates and year fixed effects; SEs clustered by country",
-      booktabs = TRUE) %>%
-  kable_styling(full_width = FALSE, position = "left")
-```
-
-
-# Data-quality balance
-
-![](../Results/figures/fig3_dq_balance.png)
-
-![](../Results/figures/fig4_dq_vs_imr.png)
 
 
 # Caveats

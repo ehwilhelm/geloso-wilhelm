@@ -1,0 +1,7 @@
+"treatment","spec","n","coef","se","p_value"
+"EFWjump","none",789,-3.3594,0.8852,2e-04
+"EFWjump","con_int",789,-3.0641,0.8744,5e-04
+"EFWjump","rp",789,-3.1462,0.8744,3e-04
+"EFWdrop","none",862,1.3671,2.0357,0.5021
+"EFWdrop","con_int",862,1.3274,2.0206,0.5114
+"EFWdrop","rp",862,1.4228,2.0221,0.4819
