@@ -1,18 +1,36 @@
-# Infant Mortality, Liberalizations and Interventionism: A Causal Analysis Accounting for Data Quality
+---
+title: "Infant Mortality, Liberalizations and Interventionism"
+subtitle: "Accounting for Data Quality"
+format:
+  pdf:
+    toc: true
+    number-sections: true
+    colorlinks: true
 
-*Preliminary results, Geloso & Wilhelm, 7 October 2026. Data: `merged.csv`, 1970–2015 quinquennial panel. Code: `Code/2) Analysis.R`.*
+# Typography & Styling
+fontsize: 10pt
+documentclass: article      # Common options: article, report, book
+mainfont: "Georgia" # System font name (Requires XeLaTeX/LuaLaTeX engine)
+monofont: "Georgia"   
+---
 
-## The question
+*Latest results, Geloso & Wilhelm, 7 October 2026.*
 
-When a country liberalizes, does infant mortality fall faster than it would have, and how much of that answer depends on how well infant mortality is measured? Countries with weak statistical systems have infant mortality series that are largely modelled rather than observed. If liberalizers tend to be measured worse (or better) than the countries they are compared with, part of any measured effect may be an artefact of data quality. Following Vincent's notes, data quality enters only as a **control**, never as an outcome: we estimate the effect of a large change in economic freedom with and without it and ask how much the estimate moves.
+## Research question
+
+When a country liberalizes, does infant mortality fall faster than it would have after accounting for data quality (or how well infant mortality is measured)?
+
+*Hypothesis & Eric Commentary:* Countries with weak statistical systems (potentially associated with weak state capacity) have infant mortality data series that are largely modelled or subject to error rather than observed. States with higher administrative capacity could collect information nearing a universal census (subject to some cost of administrative burden) or implement a sophisticated sample survey to closely approximate the social phenomenon being measured. Either way, data quality *could* be partly driving the development-related improvements. If liberalizers tend to be measured worse (or better) than the countries they are compared with, part of any measured effect may be an artifact of data quality. For this analysis, data quality enters only as a **control**, not an outcome. **We estimate the effect of large changes in economic freedom with and without controlling for data quality ("DQ") and ask how much the estimate moves.**
 
 ## Design
 
 **Treatments.** A *liberalization* is a rise of at least 1 point in the Fraser EFW summary index over a 5-year period; a *deliberalization* is a fall of at least 1 point. Episodes follow Callais & Young (2023): a period is dropped if the previous period or the one before it was an episode, or if the next one is, so the first episode of a sustained reform counts and its follow-on periods do not. That gives 48 liberalizations and 24 deliberalizations (43 and 22 with complete covariates). Liberalizations cluster in 1990–2000 (Nicaragua, Uganda, Argentina, Peru and El Salvador in 1990–95 are the largest); more than half of the deliberalizations are in 1970–75.
 
+**New Design Contribution.** Consider both *deliberalizers* along with *liberalizers* for symmetry to investigate impacts on IM and corresponding deterioration in data quality.
+
 **Outcome.** The 5-year change in the UN IGME infant mortality rate (deaths per 1,000 live births).
 
-**Data-quality control.** The width of the lagged UN IGME 90% uncertainty interval (`con_int`, Vincent's preferred measure), and as an alternative its relative precision (`rp`, half-width divided by the IMR level). Both are measured in the period before treatment, so they cannot be affected by it.
+**Data-quality control.** The width of the lagged UN IGME 90% uncertainty interval (`con_int`), and as an alternative its relative precision (`rp`, half-width divided by the IMR level). Both are measured in the period before treatment, so they cannot be affected by it.
 
 **Matching.** Treated country-years are matched to untreated ones on lagged EFW, human capital, log GDP per capita and its square, 5-year GDP growth, fertility, old-age dependency, Polity2, urbanization and lagged IMR (the Callais & Young covariates plus the lagged outcome). Three estimators: propensity-score matching with three nearest neighbours (NN3), Epanechnikov kernel propensity-score matching, and Mahalanobis NN3 with Abadie–Imbens bias adjustment. Standard errors for the two propensity-score estimators come from a 200-replication bootstrap that resamples whole countries.
 
@@ -31,17 +49,17 @@ Without the data-quality control (Test 1), infant mortality in liberalizing coun
 Deliberalizations (Tests 5–8) show no reliable effect. Point estimates range from −0.3 to +5.3 per 1,000 and none is significant. With 22 episodes, most of them in the early 1970s when IGME estimates are least precise, these tests have little power.
 
 | Test | Treatment | DQ control | PSM NN3 | PSM Kernel | Mahalanobis NN3 |
-|---|---|---|---|---|---|
-| 1 | Liberalization | none | −1.82 (1.84) | −2.50* (1.39) | −3.16*** (0.92) |
-| 2 | Liberalization | `con_int` | −1.38 (1.89) | −1.56 (1.39) | −2.34*** (0.88) |
-| 3 | Liberalization, no deliberalizers in control group | none | −2.65 (1.79) | −2.61* (1.36) | −3.21*** (0.93) |
-| 4 | Liberalization, no deliberalizers in control group | `con_int` | −1.24 (1.87) | −1.45 (1.41) | −2.62*** (0.91) |
+|----|----|----|----|----|----|
+| 1 | Liberalization | none | −1.82 (1.84) | −2.50\* (1.39) | −3.16\*\*\* (0.92) |
+| 2 | Liberalization | `con_int` | −1.38 (1.89) | −1.56 (1.39) | −2.34\*\*\* (0.88) |
+| 3 | Liberalization, no deliberalizers in control group | none | −2.65 (1.79) | −2.61\* (1.36) | −3.21\*\*\* (0.93) |
+| 4 | Liberalization, no deliberalizers in control group | `con_int` | −1.24 (1.87) | −1.45 (1.41) | −2.62\*\*\* (0.91) |
 | 5 | Deliberalization | none | 4.73 (2.93) | −0.22 (2.55) | 0.46 (2.36) |
 | 6 | Deliberalization | `con_int` | 4.35 (3.38) | 0.29 (2.51) | 0.15 (1.95) |
 | 7 | Deliberalization, no liberalizers in control group | none | 3.80 (3.00) | −0.26 (2.59) | 0.72 (2.21) |
 | 8 | Deliberalization, no liberalizers in control group | `con_int` | 5.27 (3.27) | 0.19 (2.54) | −0.18 (1.99) |
 
-*ATT in deaths per 1,000 over 5 years; standard errors in parentheses. \* p<0.10, \*\* p<0.05, \*\*\* p<0.01. Results with `rp` are in `Results/tables/att_all_tests.csv`.*
+*ATT in deaths per 1,000 over 5 years; standard errors in parentheses. \* p\<0.10, \*\* p\<0.05, \*\*\* p\<0.01. Results with relative precision (`rp`) are in `Results/tables/att_all_tests.csv`.*
 
 ### 2. Data quality is not hiding gains; if anything it slightly inflates them
 
@@ -73,19 +91,8 @@ Interval width rises almost one-for-one with the IMR level (correlation 0.83 wit
 
 ## What this means for the paper
 
-1. **The headline result holds up.** Large liberalizations are followed by infant mortality declines about 2–3 per 1,000 faster over five years, and controlling for data quality does not overturn this.
-2. **The "hidden gains" pitch needs reframing.** The IGME interval does not hide gains in 1975–2015; controlling for it trims the estimate by roughly a tenth to a third, and that change is not statistically significant. A more accurate framing: *"accounting for data quality, the gains are robust and, if anything, slightly smaller."*
-3. **A sharper data-quality measure may change the answer.** The IGME interval is mostly a function of the IMR level. The World Bank Statistical Capacity Indicator that Nishant is assembling measures state statistical capacity directly, but it starts in 2004 and most liberalizations happened in the 1990s, so it would mainly help in the 2015–2020 extension.
-4. **Deliberalizations need more episodes.** 22 episodes, mostly in the 1970s, cannot identify an effect; the 2020 extension and a 0.75-point threshold would help.
-
-## Changes from the May 2026 code
-
-The May code (archived in `Code/Archive/Code_2026-05-08/`) already set up the eight tests. Revising it changed five things that affect the numbers:
-
-- **Episode flags.** The May code dropped both periods of a back-to-back reform, so every sustained reformer lost its first episode. The revised flags follow Callais & Young's Stata sequence (48 liberalizations instead of 42, 24 deliberalizations instead of 21). The Venezuela 2000 exclusion never applied in the May code because the country is spelled "Venezuela, RB" in `merged.csv`; it now does.
-- **Kernel estimator.** `Matching::Match(Weight = 2)` is Mahalanobis weighting, not a kernel, so the May "PSM Kernel" column was a second nearest-neighbour estimate. It is now a real Epanechnikov kernel (bandwidth 0.06, the `psmatch2` default).
-- **NN3 with replacement**, as `psmatch2 ..., n(3)` does.
-- **Same sample with and without the control**, and a paired, country-clustered bootstrap for the difference.
-- **Control-group filters** now remove every opposite-direction episode, including those blanked by the adjacency rule.
-
-`1) Import_Merge.R` is unchanged.
+1.  **The headline result holds up.** Large liberalizations are followed by infant mortality declines about 2–3 per 1,000 faster over five years, and controlling for data quality does not overturn this.
+2.  **The "hidden gains" pitch needs reframing.** The IGME interval does not hide gains in 1975–2015; controlling for it trims the estimate by roughly a tenth to a third, and that change is not statistically significant. A more accurate framing: *"accounting for data quality, the gains are robust and, if anything, slightly smaller."*
+3.  **Add 2020.** My student Research Assistant is pulling data through 2020. The IGME data for 2025 isn't published until March 2027. I'm thinking about ending our analysis in 2024 (as a placeholder for 2025/today).
+4.  **A sharper data-quality measure may change the answer.** The IGME interval is mostly a function of the IMR level. The World Bank Statistical Capacity Indicator that my RA is assembling measures state statistical capacity directly, but it starts in 2004 and most liberalizations happened in the 1990s, so it would mainly help in the 2015–2020 extension. *The statistical capacity databases don't have the same time series length as the rest of our panel. We can discuss how to more directly address that alternative measure of "data quality".*
+5.  **Deliberalizations need more episodes.** 22 episodes, mostly in the 1970s, cannot identify an effect; the 2020 extension and a 0.75-point threshold would help.
