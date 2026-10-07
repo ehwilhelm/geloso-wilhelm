@@ -87,7 +87,7 @@ The propensity-score NN3 estimator does not fully balance data quality even when
 
 *Figure 4. Lagged interval width and relative precision against lagged IMR, log scales.*
 
-Interval width rises almost one-for-one with the IMR level (correlation 0.83 with lagged IMR in the estimation sample): a country with an IMR of 100 has an interval 30 or more times wider than one with an IMR of 5, even with the same statistical system. Because lagged IMR is already a matching covariate, `con_int` adds limited independent information. Relative precision is much less tied to the level (correlation 0.31) and is closer to a pure measure of measurement quality, but it becomes noisy where IMR is very low. Vincent's preference for `con_int` makes the results easy to read in deaths per 1,000; we suggest reporting `rp` alongside it, since the two tell the same story here.
+Interval width rises almost one-for-one with the IMR level (correlation 0.83 with lagged IMR in the estimation sample): a country with an IMR of 100 has an interval 30 or more times wider than one with an IMR of 5, even with the same statistical system. Because lagged IMR is already a matching covariate, `con_int` adds limited independent information. Relative precision is much less tied to the level (correlation 0.31) and is closer to a pure measure of measurement quality, but it becomes noisy where IMR is very low. Data quality measure proxy `con_int` makes the results easy to read in deaths per 1,000; we suggest reporting `rp` alongside it, since the two tell the same story here.
 
 ## What this means for the paper
 
