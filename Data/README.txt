@@ -7,13 +7,20 @@ United Nations Inter-agency Group for Child Mortality Estimation (UN IGME)
 
 https://data.unicef.org/resources/un-inter-agency-group-for-child-mortality-estimation-unigme/
 
+https://childmortality.org/all-cause-mortality/methods
+https://arxiv.org/abs/1309.1602
 
 Economic Freedom of the World
 2025 Annual Report
 
 *Likely to have revised historical estimates
 
-	https://www.fraserinstitute.org/studies/economic-freedom-world-2025-annual-report
+	https://www.fraserinstitute.org/studies/economic-freedom-world-2026-annual-report
+
+State Capacity
+
+https://colinworeilly.com/state-capacity-index/
+
 
 -------------------------------------------------------------------------------------------------
 
