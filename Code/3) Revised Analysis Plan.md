@@ -49,6 +49,7 @@ over the same window as the EFW change (`change_IM`, `2) Analysis.R` line
 | Method | PSM (NN3, kernel) and Mahalanobis NN3 | Eric, 18 Nov |
 | Pre/post measurement-error decomposition | Appendix | Eric and Vincent, 18 Nov |
 | Fertility rate | Kept as a lagged covariate (F1); no further changes | Eric, 18 Nov |
+| Jump threshold | Keep 1 point or more (not C&Y's strictly above 1). On `version11` this adds one liberalization (Congo, Rep. 1990-95, +1.00) and no deliberalizations. | Eric, 18 Nov |
 
 ## 2. Design
 
@@ -265,8 +266,5 @@ the 2015-20 window (outcome 2020-24) needs IMR for 2024 (present) and the
 
 ## 11. Open questions
 
-1. Treatment threshold: Callais & Young define a jump as a change strictly
-   above 1 point (`EFWdiff > 1`, `Merging.do` line 347). Our code uses 1 or
-   more. Switch to the strict version to follow them exactly?
-2. Headline end year: IMR through 2020 (recommended; no liberalizations after
+1. Headline end year: IMR through 2020 (recommended; no liberalizations after
    2015) or through 2024 (R3)?
