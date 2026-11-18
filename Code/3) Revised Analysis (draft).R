@@ -1,5 +1,5 @@
 # =============================================================================
-# 3) Revised Analysis (draft).R      DRAFT, revised 18 Nov 2026 - NOT YET RUN
+# 3) Revised Analysis (draft).R      DRAFT, revised 18 Nov 2026 (pm) - NOT RUN
 #
 # Companion to "3) Revised Analysis Plan.md" (read that first).
 #
@@ -7,8 +7,14 @@
 #         Effect on Infant Mortality" (Geloso & Wilhelm)
 #
 # Headline (plan sections 2-3):
-#   Outcome   : IMR LEVEL at the end of the 5-year window (OUTCOME = "IM_t").
-#               The 5-year change (October outcome) is appendix check A1.
+#   Outcome   : Callais & Young (2023) timing applied to IMR: the 5-year
+#               CHANGE in IMR over the 5 years AFTER the EFW window,
+#               IMR(t+5) - IMR(t)  (OUTCOME = "change_IM_post").
+#               C&Y: treatment = EFW change t-5..t (Merging.do l.346),
+#               outcome = F5.y - y (l.450-470), covariates at t-5 incl.
+#               the lagged outcome level (l.397-447).
+#               Robustness: A1 IMR level at t+5 ("IM_post"); A2 October
+#               timing, IMR(t) - IMR(t-5) ("change_IM").
 #   Treatment : EFW jump (+1) = liberalizer, EFW drop (-1) = deliberalizer,
 #               Callais & Young adjacency blanking. Both directions, pairs A-D.
 #   Matching  : PSM NN3, PSM kernel, Mahalanobis NN3 (bias-adjusted) on
@@ -49,9 +55,9 @@ root <- find_root()
 DATA_FILE <- Sys.getenv("REVISED_CSV",
   file.path(root, "Datawork~Nishant", "version11_wdi_merge_dataset.csv"))
 
-OUTCOME      <- "IM_t"     # headline: IMR level at t. Appendix A1: "change_IM"
-END_YEAR     <- 2020       # headline panel ends 2020 (plan section 11, Q3)
-INCLUDE_2024 <- FALSE      # TODO(data): needs 2020 GDP block
+OUTCOME      <- "change_IM_post"  # headline (C&Y). A1: "IM_post". A2: "change_IM"
+END_YEAR     <- 2020       # last IMR year used; last EFW window is 2010-15
+INCLUDE_2024 <- FALSE      # TRUE: 2015-20 windows get a 2020-24 outcome (scaled)
 THRESHOLD    <- 1          # EFW points defining a jump/drop (R2: 0.75, 0.5)
 
 SC_VAR   <- "c_comp"       # O'Reilly-Murphy ISC   # TODO(data): confirm codebook
@@ -99,11 +105,13 @@ panel <- raw %>%
   group_by(country) %>%
   mutate(
     window  = year - lag(year),               # 5 (4 for 2020-2024)
+    window_next = lead(year) - year,          # 5 (4 for 2020-2024)
     con_int = IM_upper_bound - IM_lower_bound,
     rp      = (con_int / 2) / infantmortality,
-    # Outcomes
-    IM_t      = infantmortality,                                   # headline
-    change_IM = (infantmortality - lag(infantmortality)) * 5 / window, # A1
+    # Outcomes (C&Y timing: treatment over t-5..t, outcome over t..t+5)
+    change_IM_post = (lead(infantmortality) - infantmortality) * 5 / window_next,
+    IM_post        = lead(infantmortality),                          # A1
+    change_IM      = (infantmortality - lag(infantmortality)) * 5 / window, # A2
     # Treatment input
     EFWdiff = EFW - lag(EFW),
     # Covariates at t-5 (rebuilt here; the lag* columns in the RA file are
@@ -119,7 +127,8 @@ panel <- raw %>%
     lagpolity5      = lag(polity5),
     lagurbanpop     = lag(urbanpop),
     lag_IM          = lag(infantmortality),
-    lag2_IM         = lag(infantmortality, 2),   # R4 placebo outcome (t-10)
+    # R4 placebo outcome: IMR change over t-10..t-5, before the EFW window
+    pre_change_IM   = lag(infantmortality) - lag(infantmortality, 2),
     lag_con_int     = lag(con_int),
     lag_rp          = lag(rp),
     lag_SC          = lag(.data[[SC_VAR]]),
@@ -263,10 +272,10 @@ att_mah <- function(df, treatment, covars, y = OUTCOME) {
   list(att = as.numeric(m$est), se = as.numeric(m$se), m = m)
 }
 
-# One common sample per pair (complete on the outcome, the appendix outcome
-# and every covariate of every spec)
+# One common sample per pair (complete on the headline and robustness
+# outcomes and every covariate of every spec), so A1/A2 compare like with like
 test_sample <- function(data, treatment, control_filter = NULL) {
-  need <- c("IM_t", "change_IM", all_covars)
+  need <- c("change_IM_post", "IM_post", "change_IM", all_covars)
   ok <- complete.cases(as.data.frame(data)[, need])
   df <- as.data.frame(data[ok, ])
   df <- df[!is.na(df[[treatment]]), ]
@@ -320,7 +329,7 @@ smd_raw <- function(x, tr) (mean(x[tr]) - mean(x[!tr])) / sd(x[tr])
 # =============================================================================
 
 coverage <- panel %>% group_by(year) %>%
-  summarise(across(all_of(c("IM_t", all_covars)), ~ sum(!is.na(.))),
+  summarise(across(all_of(c("change_IM_post", all_covars)), ~ sum(!is.na(.))),
             .groups = "drop")
 write.csv(coverage, file.path(tab_dir, "D1_coverage_by_year.csv"), row.names = FALSE)
 
@@ -428,23 +437,28 @@ balance_table <- function(results) {
   }))
 }
 
-res_level <- run_all("IM_t")                       # headline
-att_lvl <- att_table(res_level)
-con_lvl <- contrast_table(res_level)
-bal_lvl <- balance_table(res_level)
-write.csv(att_lvl, file.path(tab_dir, "T3_att_levels.csv"), row.names = FALSE)
-write.csv(con_lvl, file.path(tab_dir, "T4_contrasts_levels.csv"), row.names = FALSE)
-write.csv(bal_lvl, file.path(tab_dir, "T5_balance_levels.csv"), row.names = FALSE)
+res_main <- run_all(OUTCOME)                      # headline (C&Y timing)
+att_main <- att_table(res_main)
+con_main <- contrast_table(res_main)
+bal_main <- balance_table(res_main)
+write.csv(att_main, file.path(tab_dir, "T3_att.csv"), row.names = FALSE)
+write.csv(con_main, file.path(tab_dir, "T4_contrasts.csv"), row.names = FALSE)
+write.csv(bal_main, file.path(tab_dir, "T5_balance.csv"), row.names = FALSE)
 
-# Appendix A1: same design, 5-year change outcome
-res_change <- run_all("change_IM")
-write.csv(att_table(res_change), file.path(tab_dir, "A1_att_changes.csv"), row.names = FALSE)
-write.csv(contrast_table(res_change), file.path(tab_dir, "A1_contrasts_changes.csv"),
+# Robustness A1 (IMR level at t+5) and A2 (October timing, change over t-5..t)
+res_A1 <- run_all("IM_post")
+res_A2 <- run_all("change_IM")
+write.csv(att_table(res_A1), file.path(tab_dir, "A1_att_level_post.csv"), row.names = FALSE)
+write.csv(contrast_table(res_A1), file.path(tab_dir, "A1_contrasts_level_post.csv"),
+          row.names = FALSE)
+write.csv(att_table(res_A2), file.path(tab_dir, "A2_att_same_window_change.csv"),
+          row.names = FALSE)
+write.csv(contrast_table(res_A2), file.path(tab_dir, "A2_contrasts_same_window_change.csv"),
           row.names = FALSE)
 
 # Summary statistics for the pair-A common sample
-sum_vars <- c("IM_t", "change_IM", "EFWdiff", all_covars)
-sumstats <- res_level$A$df[, sum_vars] %>%
+sum_vars <- c("change_IM_post", "IM_post", "change_IM", "EFWdiff", all_covars)
+sumstats <- res_main$A$df[, sum_vars] %>%
   summarise(across(everything(),
                    list(Mean = ~mean(.), SD = ~sd(.), Min = ~min(.), Max = ~max(.)),
                    .names = "{.col}__{.fn}")) %>%
@@ -460,19 +474,19 @@ pair_names <- c(A = "Liberalization", B = "Liberalization, no deliberalizers",
                 C = "Deliberalization", D = "Deliberalization, no liberalizers")
 
 # F1: ATT by spec, pair and estimator
-f1 <- att_lvl %>%
+f1 <- att_main %>%
   mutate(pair = pair_names[pair], lo = att - 1.96 * se, hi = att + 1.96 * se,
          spec = factor(spec, levels = names(specs))) %>%
   ggplot(aes(x = spec, y = att, colour = estimator)) +
   geom_hline(yintercept = 0, colour = "grey60") +
   geom_pointrange(aes(ymin = lo, ymax = hi), position = position_dodge(0.5)) +
   facet_wrap(~ pair, scales = "free_y") +
-  labs(x = NULL, y = "ATT on IMR at t (deaths per 1,000)", colour = NULL) +
+  labs(x = NULL, y = "ATT on IMR change, t to t+5 (deaths per 1,000)", colour = NULL) +
   theme_minimal() + theme(legend.position = "bottom")
 ggsave(file.path(fig_dir, "F1_att_by_spec.png"), f1, width = 9, height = 6, dpi = 200)
 
 # F2: headline contrast S2 - S1
-f2 <- con_lvl %>% filter(contrast == "dq_given_sc") %>%
+f2 <- con_main %>% filter(contrast == "dq_given_sc") %>%
   mutate(pair = pair_names[pair]) %>%
   ggplot(aes(x = pair, y = diff, colour = estimator)) +
   geom_hline(yintercept = 0, colour = "grey60") +
@@ -485,7 +499,7 @@ f2 <- con_lvl %>% filter(contrast == "dq_given_sc") %>%
 ggsave(file.path(fig_dir, "F2_headline_contrast.png"), f2, width = 8, height = 4, dpi = 200)
 
 # F3: balance (love plot), S1 vs S2, Mahalanobis
-f3 <- bal_lvl %>% filter(spec %in% c("S1", "S2")) %>%
+f3 <- bal_main %>% filter(spec %in% c("S1", "S2")) %>%
   mutate(pair = pair_names[pair]) %>%
   pivot_longer(c(smd_before, smd_after_mah), names_to = "when", values_to = "smd") %>%
   ggplot(aes(x = smd, y = variable, shape = when, colour = spec)) +
@@ -513,16 +527,16 @@ ggsave(file.path(fig_dir, "F4_conint_vs_imr_by_sc.png"), f4, width = 7, height =
 # =============================================================================
 # R1  SC_VAR <- SC_ALT                      (V-Dem fiscal capacity)
 # R2  THRESHOLD <- 0.75 or 0.5
-# R3  INCLUDE_2024 <- TRUE                  # TODO(data): 2020 GDP block
-# R4  placebo: run_all("lag2_IM") after adding "lag2_IM" to test_sample()'s
-#     required columns; should show no effect
+# R3  INCLUDE_2024 <- TRUE                  (2015-20 windows, 2020-24 outcome)
+# R4  placebo: run_all("pre_change_IM") after adding "pre_change_IM" to
+#     test_sample()'s required columns; should show no effect
 # R5  IGME vintage: point REVISED_CSV at the old merged.csv build
 # R6  drop windows ending 1975
 # R7  FERT_OPTION <- "F2" / "F3" / "F4" / "F5"
 # R8  WB Statistical Capacity Indicator    # TODO(data): not merged yet
 
-saveRDS(list(panel = panel, levels = res_level, changes = res_change,
-             att = att_lvl, contrasts = con_lvl, balance = bal_lvl,
+saveRDS(list(panel = panel, main = res_main, A1 = res_A1, A2 = res_A2,
+             att = att_main, contrasts = con_main, balance = bal_main,
              settings = list(DATA_FILE = DATA_FILE, OUTCOME = OUTCOME,
                              END_YEAR = END_YEAR, THRESHOLD = THRESHOLD,
                              SC_VAR = SC_VAR, FERT_OPTION = FERT_OPTION)),

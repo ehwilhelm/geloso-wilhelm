@@ -1,15 +1,16 @@
 # Revised analysis plan: liberalization, state capacity and data quality
 
 *Draft for Eric's review. First version 16 November 2026, revised 18 November
-2026. Companion script: `Code/3) Revised Analysis (draft).R` (drafted, not yet
+2026 (outcome timing updated the same afternoon). Companion script: `Code/3) Revised Analysis (draft).R` (drafted, not yet
 run, because the panel is not final). Plain ASCII so it compiles through
 LaTeX.*
 
 ## 0. What changed in this revision (18 Nov)
 
-- **Outcome is now IMR in levels** (the IMR at the end of each 5-year window),
-  as Eric and Vincent decided. The 5-year change in IMR moves to the appendix
-  as robustness check A1.
+- **Outcome follows Callais & Young (2023), applied to IMR** (Eric, 18 Nov,
+  after checking their paper): the **5-year change in IMR over the 5 years
+  after the EFW window**, $Y_{i,t+5} - Y_{i,t}$. The IMR level and the
+  October same-window change become robustness checks A1 and A2.
 - **Headline specification:** IMR ~ EFW treatment, with matching on the
   baseline covariates plus **O'Reilly-Murphy state capacity** and the **IGME
   interval width (`con_int`)** as the data-quality proxy. The residualized
@@ -24,35 +25,44 @@ LaTeX.*
   (17 Nov).
 - **Project workplan:** Eric's six-step sequence is in Section 10.
 
-**Note on "levels as before".** The May and October scripts both used the
-5-year *change* in IMR as the outcome (`change_IM`). Making levels the
-headline is therefore a change from what the code did, even though it matches
-how Eq. 3 of the draft paper is written. If "as before" meant the October
-outcome, it is a one-line switch in the script (`OUTCOME`).
+**What Callais & Young do.** Their outcome is the 5-year change in each
+inequality measure. In the SSRN version in `Papers/`: "For all three outcomes
+variables, we examine five-year changes" (p. 16, Sec. 4.2); "The outcome in
+all cases is the 5-year change" (p. 19, Sec. 5); they compare "post-treatment
+changes" (p. 9). Their replication code (`Callais Young/Merging.do`) defines
+the treatment as the EFW change from $t-5$ to $t$ (line 346), the outcome as
+the change from $t$ to $t+5$ (`F5.y - y`, lines 450-470), and the covariates,
+including the lagged outcome level, at $t-5$ (lines 397-447). Following them
+for IMR changes the October timing: the October code measured the IMR change
+over the same window as the EFW change (`change_IM`, `2) Analysis.R` line
+153). This makes the October estimates A2.
 
 ## 1. Decisions to date
 
 | Topic | Decision | Source |
 |---|---|---|
-| Outcome | IMR level at the end of the window. Change in IMR in the appendix. | Eric, 18 Nov |
+| Outcome | Change in IMR from $t$ to $t+5$, after the EFW window $t-5$ to $t$ (Callais & Young timing). IMR level at $t+5$ (A1) and the same-window change (A2) as robustness. | Eric, 18 Nov |
 | Treatment | A 5-year EFW change of +1 or more (liberalization) or -1 or less (deliberalization), with Callais & Young adjacency blanking | Vincent Notes, Oct design |
 | State capacity | O'Reilly-Murphy Index of State Capacity, time-varying | Eric, 17 Nov |
 | Regime type | Polity5 as a matching covariate (2018 values stand in for 2020) | Eric, 16-17 Nov |
 | Data quality | IGME 90% interval width, `con_int`, lagged. A control, never an outcome. | Vincent Notes; Eric, 18 Nov |
 | Method | PSM (NN3, kernel) and Mahalanobis NN3 | Eric, 18 Nov |
-| Changes / pre-post decomposition | Appendix | Eric and Vincent, 18 Nov |
+| Pre/post measurement-error decomposition | Appendix | Eric and Vincent, 18 Nov |
+| Fertility rate | Kept as a lagged covariate (F1); no further changes | Eric, 18 Nov |
 
 ## 2. Design
 
-- **Unit:** country x 5-year window. A window ends at $t$ (1975, ..., 2020) and
-  starts at $t-5$.
+- **Timing (Callais & Young):** covariates at $t-5$, treatment window
+  $t-5$ to $t$, outcome window $t$ to $t+5$.
 - **Treatment $D_{it}$:** EFWjump (liberalization) or EFWdrop
-  (deliberalization) over the window.
-- **Outcome (headline):** $Y_{it}$ = IGME infant mortality at $t$, deaths per
-  1,000 live births. Because lagged IMR $Y_{i,t-5}$ is a matching covariate,
-  treated and comparison countries start from similar levels. The level ATT
-  compares where they end up.
-- **Outcome (appendix A1):** $Y_{it} - Y_{i,t-5}$, as in October.
+  (deliberalization) over $t-5$ to $t$. With IMR ending in 2020, treatment
+  windows run from 1970-75 to 2010-15. No jumps and only one drop occur in
+  2015-20, so the lost window costs almost nothing.
+- **Outcome (headline):** $\Delta Y_{i,t+5} = Y_{i,t+5} - Y_{i,t}$, the
+  IGME infant mortality change in deaths per 1,000 live births over the 5
+  years after the EFW window.
+- **Robustness A1:** IMR level $Y_{i,t+5}$. **A2:** the October same-window
+  change $Y_{it} - Y_{i,t-5}$.
 - **Baseline covariates, all at $t-5$:** EFW, human capital, ln GDP per capita
   and its square, 5-year GDP growth, fertility rate (see Section 5), old-age
   dependency, Polity5, urbanization and IMR.
@@ -103,11 +113,12 @@ Each contrast is also shown as a share of its baseline ATT.
 ## 4. State capacity and data quality in the headline: endogeneity safeguards
 
 ```
-   SC(t-5) ---> D (EFW jump/drop over t-5..t) ---> true IMR(t) ---> observed IMR(t)
-     |                                                                 ^
-     +---> true IMR(t-5) ---> con_int(t-5)                            |
-     |                            ^                                    |
-     +---> statistical capacity --+------> measurement error u(t) -----+
+   SC(t-5) ---> D (EFW jump/drop over t-5..t) ---> true IMR change t..t+5
+     |                                                    |
+     |                                                    v
+     +---> true IMR(t-5) ---> con_int(t-5)        observed IMR change t..t+5
+     |                            ^                       ^
+     +---> statistical capacity --+---> measurement error u(t), u(t+5)
 ```
 
 1. **Pre-treatment timing.** State capacity, `con_int` and every other
@@ -129,7 +140,7 @@ Each contrast is also shown as a share of its baseline ATT.
 
 The pre/post decomposition of measurement error (Proposals A-D in
 `notes/section-2-3-pre-post-measurement-error.md`, project files) belongs to
-the appendix, together with the change outcome.
+the appendix. With the C&Y timing, its "pre" and "post" are $t$ and $t+5$.
 
 ## 5. Fertility rate as a matching covariate
 
@@ -185,9 +196,11 @@ script switches between F1-F5 with one setting (`FERT_OPTION`).
 | V-Dem | Still to be updated (Nishant's note) |
 | ISO3, merge script, EFW source | As in the 16 Nov data review notes |
 
-**What can run now:** windows ending 1975-2020 need covariates at $t-5$ only,
-so 1970-2015 values. Those exist, apart from the 17 missing 2015 rows. The
-2020-2024 window waits on the GDP block.
+**What can run now:** treatment windows 1970-75 to 2010-15 need covariates
+at 1970-2010 and IMR up to 2020. Those exist. The 17 countries with no 2015
+row lose the 2005-10 and 2010-15 windows until those rows are added. Adding
+the 2015-20 window (outcome 2020-24) needs IMR for 2024 (present) and the
+2015 covariates.
 
 ## 7. Diagnostics and visualizations (to be tuned after Eric's review)
 
@@ -212,14 +225,17 @@ so 1970-2015 values. Those exist, apart from the 17 missing 2015 rows. The
 
 ## 8. Robustness checks and appendix
 
-- **A1 Changes outcome:** the 5-year change in IMR (October outcome), with the
-  pre/post measurement-error decomposition.
+- **A1 Level outcome:** IMR at $t+5$.
+- **A2 October timing:** the IMR change over the EFW window itself,
+  $Y_{it} - Y_{i,t-5}$. This links the new estimates to the October table.
+- **A3 Pre/post decomposition** of measurement error (theory appendix).
 - R1: state capacity measured by V-Dem fiscal capacity (`v2stfisccap`).
 - R2: thresholds of 0.75 and 0.5 EFW points (more episodes; the paper already
   promises the 0.5 test).
-- R3: add the 2020-2024 window once the GDP block is filled.
-- R4: placebo, matching on $t-5$ covariates and using IMR at $t-10$ as the
-  outcome. It should show no "effect".
+- R3: add the 2015-20 treatment window with a 4-year 2020-24 outcome
+  (scaled to 5 years).
+- R4: placebo, using the IMR change from $t-10$ to $t-5$ (before the EFW
+  window) as the outcome. It should show no "effect".
 - R5: IGME vintage (old ALLDATA IMR vs `version11`).
 - R6: drop the 1970-75 window.
 - R7: fertility options F2-F5.
@@ -249,9 +265,8 @@ so 1970-2015 values. Those exist, apart from the 17 missing 2015 rows. The
 
 ## 11. Open questions
 
-1. Is the IMR level at the end of the window the "levels" outcome you mean,
-   or did you mean the October outcome (see Section 0)?
-2. Fertility: keep F1 as the headline and run F2-F5 as robustness, or drop it
-   from the headline now?
-3. Headline end year: 2020 (recommended; no liberalizations after 2015) or
-   2024?
+1. Treatment threshold: Callais & Young define a jump as a change strictly
+   above 1 point (`EFWdiff > 1`, `Merging.do` line 347). Our code uses 1 or
+   more. Switch to the strict version to follow them exactly?
+2. Headline end year: IMR through 2020 (recommended; no liberalizations after
+   2015) or through 2024 (R3)?
