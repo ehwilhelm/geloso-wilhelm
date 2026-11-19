@@ -244,21 +244,12 @@ panel <- panel %>%
   ) %>%
   ungroup()
 
-# Median split for the two-by-two figure: EFW at the start of the window
-# (t-5) above or below that year's cross-country median.
-panel <- panel %>%
-  group_by(year) %>%
-  mutate(efw_half = if_else(lagEFW > median(lagEFW, na.rm = TRUE),
-                            "EFW score above median", "EFW score below median")) %>%
-  ungroup()
-
 episodes <- panel %>%
   filter(EFWjump %in% 1 | EFWdrop %in% 1, !is.na(.data[[OUTCOME]])) %>%
   transmute(country, period = paste0(year - window, "-", year),
             type = if_else(EFWjump %in% 1, "Liberalization", "Deliberalization"),
             EFW_start = round(lagEFW, 2), EFW_change = round(EFWdiff, 2),
-            pctile_rank_change = round(EFWrdiff, 3),
-            efw_half)
+            pctile_rank_change = round(EFWrdiff, 3))
 write.csv(episodes, file.path(tab_dir, "T1_episodes.csv"), row.names = FALSE)
 
 
@@ -554,62 +545,36 @@ write.csv(sumstats, file.path(tab_dir, "T2_summary_statistics.csv"), row.names =
 
 
 # =============================================================================
-# Part 8: Two-by-two diagnostic, liberalizers/deliberalizers x EFW half
+# Part 8: Liberalizers (headline) vs deliberalizers (appendix)
 # =============================================================================
-# Rows: liberalizers (pair A) and deliberalizers (pair C). Columns: EFW at
-# t-5 above or below that year's median. Treated and comparison countries are
-# both drawn from the same half, and matching is redone within the half.
+# Full-sample estimates from Part 7: liberalizers = pair A (headline),
+# deliberalizers = pair C (appendix). The above/below-median EFW split was
+# dropped on 19 Nov (Eric): the halves were too thin to estimate.
 # Two versions of the figure:
 #   F1  : "No DQ control" (S2: naive + state capacity) vs
 #         "DQ control: con_int" (S3, headline)
 #   F1b : "No state capacity control" (S1, naive) vs
 #         "State capacity control" (S2); neither controls for data quality
 
-halves <- c("EFW score above median", "EFW score below median")
-grid_res <- list()
-for (p in c("A", "C")) for (h in halves) {
-  pr <- pairs[[p]]
-  df <- test_sample(panel, pr$treatment, pr$control_filter)
-  df <- df[df$efw_half == h, ]
-  grid_res[[paste(p, h, sep = "|")]] <-
-    run_pair(df, pr$treatment, OUTCOME, paste("Pair", p, "-", h))
-}
-
-grid_tab <- do.call(rbind, lapply(names(grid_res), function(k) {
-  r <- grid_res[[k]]
-  pp <- strsplit(k, "|", fixed = TRUE)[[1]]
-  if (is.null(r)) {
-    return(data.frame(pair = pp[1], half = pp[2], spec = NA, label = NA,
-                      estimator = NA, att = NA, se = NA,
-                      n_treated = sum(test_sample(panel, pairs[[pp[1]]]$treatment)$efw_half == pp[2] &
-                                        test_sample(panel, pairs[[pp[1]]]$treatment)[[pairs[[pp[1]]]$treatment]] == 1),
-                      n = NA))
-  }
-  cbind(pair = pp[1], half = pp[2],
-        do.call(rbind, lapply(names(specs), function(s) att_rows(r, s))))
-}))
-write.csv(grid_tab, file.path(tab_dir, "T7_two_by_two_median_split.csv"),
-          row.names = FALSE)
-
+side_names <- c(A = "Liberalizers (headline)", C = "Deliberalizers (appendix)")
 est_levels <- c("Mahalanobis NN3 (BA)", "PSM Kernel", "PSM NN3")
 
-n_lab <- grid_tab %>% group_by(pair, half) %>%
+lib_delib_tab <- att_main %>% filter(pair %in% names(side_names))
+write.csv(lib_delib_tab, file.path(tab_dir, "T7_liberalizers_vs_deliberalizers.csv"),
+          row.names = FALSE)
+
+n_lab <- lib_delib_tab %>% group_by(pair) %>%
   summarise(n_treated = first(n_treated), n = first(n), .groups = "drop") %>%
-  mutate(row = factor(if_else(pair == "A", "Liberalizers", "Deliberalizers"),
-                      levels = c("Liberalizers", "Deliberalizers")),
-         half = factor(half, levels = halves),
-         lab = paste0(n_treated, " treated", if_else(is.na(n), " (too few to match)",
-                                                     paste0(", ", n, " obs"))))
+  mutate(side = factor(side_names[pair], levels = side_names),
+         lab = paste0(n_treated, " treated, ", n, " obs"))
 
 # spec_map: named vector, spec code -> legend label (first = without the
 # control, second = with it)
-plot_grid <- function(spec_map, cols, note, file) {
-  g <- grid_tab %>%
+plot_sides <- function(spec_map, cols, note, file) {
+  g <- lib_delib_tab %>%
     filter(spec %in% names(spec_map)) %>%
     mutate(ctrl = factor(spec_map[spec], levels = spec_map),
-           row = factor(if_else(pair == "A", "Liberalizers", "Deliberalizers"),
-                        levels = c("Liberalizers", "Deliberalizers")),
-           half = factor(half, levels = halves),
+           side = factor(side_names[pair], levels = side_names),
            estimator = factor(estimator, levels = est_levels),
            lo = att - 1.96 * se, hi = att + 1.96 * se)
   f <- ggplot(g, aes(x = att, y = estimator, colour = ctrl)) +
@@ -619,31 +584,30 @@ plot_grid <- function(spec_map, cols, note, file) {
     geom_point(size = 2.6, position = position_dodge(width = 0.55)) +
     geom_text(data = n_lab, aes(x = Inf, y = Inf, label = lab), inherit.aes = FALSE,
               hjust = 1.05, vjust = 1.4, size = 3, colour = "grey35") +
-    facet_grid(row ~ half, scales = "free_x") +
+    facet_wrap(~ side, nrow = 1, scales = "free_x") +
     scale_colour_manual(values = setNames(cols, spec_map), drop = FALSE) +
     labs(title = paste("Effect of", treat_text, "on the", out_lab$what),
          subtitle = paste0("ATT in deaths per 1,000 live births with 95% CI, ",
                            if (APPENDIX_2024) "1970-2024 (appendix)" else "1970-2020",
-                           ". ", out_lab$sign, "\n",
-                           note, " EFW halves split at each year's median EFW at t-5."),
+                           ". ", out_lab$sign, "\n", note),
          x = out_lab$axis, y = NULL, colour = NULL) +
     theme_minimal(base_size = 11) +
     theme(legend.position = "bottom", strip.text = element_text(face = "bold"),
-          plot.title = element_text(face = "bold"), panel.spacing = unit(1.2, "lines"))
-  ggsave(file.path(fig_dir, file), f, width = 10, height = 7, dpi = 200)
+          plot.title = element_text(face = "bold"), panel.spacing = unit(1.5, "lines"))
+  ggsave(file.path(fig_dir, file), f, width = 10, height = 4.8, dpi = 200)
   invisible(f)
 }
 
 sc_name <- paste(SC_VARS, collapse = ", ")
-plot_grid(c(S2 = "No DQ control", S3 = "DQ control: con_int"),
-          c("#2a6fdb", "#e8613a"),
-          paste0("Both specifications control for state capacity (", sc_name, ")."),
-          "F1_two_by_two_dq_median_split.png")
-plot_grid(c(S1 = "No state capacity control",
-            S2 = paste0("State capacity control: ", sc_name)),
-          c("#8a8a8a", "#2a6fdb"),
-          "Neither specification controls for data quality (con_int).",
-          "F1b_two_by_two_sc_median_split.png")
+plot_sides(c(S2 = "No DQ control", S3 = "DQ control: con_int"),
+           c("#2a6fdb", "#e8613a"),
+           paste0("Both specifications control for state capacity (", sc_name, ")."),
+           "F1_lib_vs_delib_dq.png")
+plot_sides(c(S1 = "No state capacity control",
+             S2 = paste0("State capacity control: ", sc_name)),
+           c("#8a8a8a", "#2a6fdb"),
+           "Neither specification controls for data quality (con_int).",
+           "F1b_lib_vs_delib_sc.png")
 
 
 # =============================================================================
@@ -691,9 +655,9 @@ ggsave(file.path(fig_dir, "F3_headline_contrast.png"), f3, width = 9, height = 4
 # Outcomes      : Sys.setenv(OUTCOME = "IM_t" / "change_IM_post" / "change_IM")
 # Threshold     : THRESHOLD <- 0.75 or 0.5
 
-saveRDS(list(panel = panel, main = res_main, grid = grid_res,
+saveRDS(list(panel = panel, main = res_main,
              att = att_main, contrasts = con_main, balance = bal_main,
-             grid_tab = grid_tab, regressions = reg_tab,
+             lib_delib = lib_delib_tab, regressions = reg_tab,
              settings = list(DATA_FILE = DATA_FILE, OUTCOME = OUTCOME,
                              APPENDIX_2024 = APPENDIX_2024, THRESHOLD = THRESHOLD,
                              TREAT_SCALE = TREAT_SCALE, SC_VARS = SC_VARS,

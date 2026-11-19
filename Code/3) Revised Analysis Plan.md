@@ -27,6 +27,14 @@ it compiles through LaTeX.*
 - Outputs: `Results/version16/headline_1970-2020/` and
   `appendix_1970-2024/` now hold the level results. The change results they
   held before are in git history (commit b9865fa).
+- **Liberalizers are the headline results; deliberalizers go in the
+  appendix** (Eric, 19 Nov).
+- **The above/below-median EFW split is dropped** (Eric, 19 Nov): the halves
+  were too thin (as few as 4 treated). The two figures are now a simple
+  side-by-side of liberalizers (headline) and deliberalizers (appendix) on
+  the full sample: F1 compares "No DQ control" with "DQ control: con_int",
+  F1b compares "No state capacity control" with "State capacity control:
+  c_comp".
 
 ## 0a. What changed in the 19 Nov morning revision
 
@@ -139,10 +147,10 @@ over the same window as the EFW change (`change_IM`, `2) Analysis.R` line
 
 | Pair | Treated | Comparison pool | October tests |
 |---|---|---|---|
-| A | Liberalizers | All non-liberalizing windows | 1, 2 |
-| B | Liberalizers | Excludes every deliberalization window | 3, 4 |
-| C | Deliberalizers | All non-deliberalizing windows | 5, 6 |
-| D | Deliberalizers | Excludes every liberalization window | 7, 8 |
+| A | Liberalizers (headline) | All non-liberalizing windows | 1, 2 |
+| B | Liberalizers (headline robustness) | Excludes every deliberalization window | 3, 4 |
+| C | Deliberalizers (appendix) | All non-deliberalizing windows | 5, 6 |
+| D | Deliberalizers (appendix) | Excludes every liberalization window | 7, 8 |
 
   Within each pair, every specification uses **one common sample**: rows
   complete on every covariate used by any specification. Differences between
@@ -163,12 +171,13 @@ over the same window as the EFW change (`change_IM`, `2) Analysis.R` line
 - S2 - S1: what state capacity changes.
 - S3 - S1: both together.
 
-**Two-by-two diagnostic (figure F1).** Rows: liberalizers (pair A) and
-deliberalizers (pair C). Columns: EFW score at $t-5$ above or below that
-year's cross-country median. Treated and comparison countries come from the
-same half and matching is redone within it. Each panel shows S2 ("No DQ
-control") and S3 ("DQ control: con_int") for PSM NN3, PSM kernel and
-Mahalanobis NN3.
+**Liberalizers vs deliberalizers (figures F1 and F1b, 19 Nov).** Two
+panels side by side, full sample: liberalizers (pair A, headline) and
+deliberalizers (pair C, appendix). F1 shows S2 ("No DQ control") and S3
+("DQ control: con_int"); F1b shows S1 ("No state capacity control") and S2
+("State capacity control: c_comp"); each for PSM NN3, PSM kernel and
+Mahalanobis NN3. The earlier split by EFW score above or below the median
+was dropped on 19 Nov.
 
 Each contrast is also shown as a share of its baseline ATT.
 
@@ -291,16 +300,16 @@ the 2015-20 window (outcome 2020-24) needs IMR for 2024 (present) and the
   state capacity, `con_int`, lagged IMR, lagged fertility and Polity5.
 - T6: regression benchmark, IMR level on the continuous EFW change, year
   fixed effects, country-clustered SEs, same three steps.
-- T7: the two-by-two median split behind figure F1.
+- T7: liberalizers vs deliberalizers, the estimates behind figures F1 and
+  F1b.
 - D1: coverage by year. D2: correlations and VIF. D3: selection logit (are
   liberalizers positively selected on state capacity?).
 
 **Figures:**
 
-- F1: two-by-two diagnostic, liberalizers vs deliberalizers by EFW above vs
-  below median, "No DQ control" vs "DQ control: con_int" for each matching
-  method (Section 3).
-- F1b: the same two-by-two for step 2 without any data-quality control:
+- F1: liberalizers (headline) vs deliberalizers (appendix), "No DQ control"
+  vs "DQ control: con_int" for each matching method (Section 3).
+- F1b: the same layout for step 2, without any data-quality control:
   "No state capacity control" (S1) vs "State capacity control: c_comp" (S2).
 - F2: ATT by specification step for each pair, with 95% intervals (like
   Figure 1 of the notes page).
