@@ -1,11 +1,39 @@
 # Revised analysis plan: liberalization, state capacity and data quality
 
-*Draft for Eric's review. First version 16 November 2026, revised 18 November
-2026 (outcome timing updated the same afternoon). Companion script: `Code/3) Revised Analysis (draft).R` (drafted, not yet
-run, because the panel is not final). Plain ASCII so it compiles through
-LaTeX.*
+*Draft for Eric's review. First version 16 November 2026, revised 18 and 19
+November 2026. Companion script: `Code/3) Revised Analysis (draft).R`, which
+now reads `Datawork~Nishant/version16.csv` and runs end to end. Plain ASCII so
+it compiles through LaTeX.*
 
-## 0. What changed in this revision (18 Nov)
+## 0a. What changed in this revision (19 Nov)
+
+- **Sample period.** The headline results cover **1970-2020**: EFW windows
+  1970-75 to 2010-15, with IMR outcomes through 2020. The **extension of the
+  panel to 2024 goes in the appendix**: it adds the 2015-20 EFW window with a
+  2020-24 IMR outcome (4 years, scaled to 5). Script setting `APPENDIX_2024`.
+- **Data:** `version16.csv` (19 Nov). `totalpop` and `totalGDP` are empty for
+  2020 and 2024, so GDP per capita is built from PWT `rgdpe / pop`. PWT 2024
+  is not released, so the 2024 rows carry 2023 PWT values.
+- **Main independent variable:** the 5-year change in the EFW summary index
+  (`ECONOMIC FREEDOM ALL AREAS`). The change in EFW **rank** is a separate
+  analysis (script setting `TREAT_SCALE = "rank"`).
+- **Treatment:** liberalizer = EFW change of **+1 or more**; deliberalizer =
+  EFW change of **-1 or less** (Eric, 19 Nov).
+- **Specification sequence (replaces S0-S5):**
+  1. Naive: IMR change ~ EFW treatment, matching on the baseline covariates.
+  2. Add state capacity: O'Reilly-Murphy `c_comp` and `pca_comp`.
+  3. **Headline:** add `con_int` = `IM_upper_bound` - `IM_lower_bound`.
+- **Relative precision (`rp`) is dropped** from the analysis, and so is the
+  residualized data-quality measure (old S5). `con_int` is the only
+  data-quality control.
+- **New diagnostic figure:** a two-by-two grid, liberalizers vs
+  deliberalizers by EFW score above vs below the median, each panel comparing
+  "No DQ control" (step 2) with "DQ control: con_int" (step 3) for each
+  matching method, in the style of Figure 1 of the notes page.
+- **Regression benchmark:** OLS of the IMR change on the continuous EFW change
+  with year fixed effects, adding the same three steps (table T6).
+
+## 0. What changed in the previous revision (18 Nov)
 
 - **Outcome follows Callais & Young (2023), applied to IMR** (Eric, 18 Nov,
   after checking their paper): the **5-year change in IMR over the 5 years
@@ -43,9 +71,13 @@ over the same window as the EFW change (`change_IM`, `2) Analysis.R` line
 |---|---|---|
 | Outcome | Change in IMR from $t$ to $t+5$, after the EFW window $t-5$ to $t$ (Callais & Young timing). IMR level at $t+5$ (A1) and the same-window change (A2) as robustness. | Eric, 18 Nov |
 | Treatment | A 5-year EFW change of +1 or more (liberalization) or -1 or less (deliberalization), with Callais & Young adjacency blanking | Vincent Notes, Oct design |
-| State capacity | O'Reilly-Murphy Index of State Capacity, time-varying | Eric, 17 Nov |
+| State capacity | O'Reilly-Murphy Index of State Capacity, time-varying: `c_comp` and `pca_comp` | Eric, 17 and 19 Nov |
+| Sample period | Headline 1970-2020; extension to 2024 in the appendix | Eric, 19 Nov |
+| Main regressor | Change in the EFW summary index; change in EFW rank as a separate analysis | Eric, 19 Nov |
+| Specification sequence | Naive, then + state capacity, then + `con_int` (headline); `rp` dropped | Eric, 19 Nov |
+| GDP per capita | `rgdpe / pop` (PWT); 2023 PWT values stand in for 2024 | Eric, 19 Nov |
 | Regime type | Polity5 as a matching covariate (2018 values stand in for 2020) | Eric, 16-17 Nov |
-| Data quality | IGME 90% interval width, `con_int`, lagged. A control, never an outcome. | Vincent Notes; Eric, 18 Nov |
+| Data quality | IGME 90% interval width, `con_int` = `IM_upper_bound` - `IM_lower_bound`, lagged. A control, never an outcome. `rp` dropped. | Vincent Notes; Eric, 18-19 Nov |
 | Method | PSM (NN3, kernel) and Mahalanobis NN3 | Eric, 18 Nov |
 | Pre/post measurement-error decomposition | Appendix | Eric and Vincent, 18 Nov |
 | Fertility rate | Kept as a lagged covariate (F1); no further changes | Eric, 18 Nov |
@@ -67,9 +99,10 @@ over the same window as the EFW change (`change_IM`, `2) Analysis.R` line
 - **Baseline covariates, all at $t-5$:** EFW, human capital, ln GDP per capita
   and its square, 5-year GDP growth, fertility rate (see Section 5), old-age
   dependency, Polity5, urbanization and IMR.
-- **State capacity:** O'Reilly-Murphy `c_comp` at $t-5$. The three ISC
-  sub-indices correlate at 0.98 or more, so only one is used. The codebook
-  still needs to confirm that `comp` is the composite.
+- **State capacity:** O'Reilly-Murphy `c_comp` and `pca_comp` at $t-5$
+  (Eric, 19 Nov). In `version16` the two correlate at 0.99999 (VIF about
+  66,000 in the headline propensity model), so together they act as one
+  variable; dropping `pca_comp` is a one-line change (`SC_VARS`).
 - **Data quality:** `con_int` = upper minus lower bound of the IGME 90%
   interval at $t-5$.
 - **Estimators:** PSM NN3 (logit score, caliper 0.25 SD, with replacement),
@@ -90,24 +123,27 @@ over the same window as the EFW change (`change_IM`, `2) Analysis.R` line
   complete on every covariate used by any specification. Differences between
   specifications then come from the covariates alone.
 
-## 3. Specification ladder
+## 3. Specification sequence (19 Nov)
 
-| Spec | Matching covariates | Role |
+| Step | Matching covariates | Role |
 |---|---|---|
-| S0 | Baseline | Comparable to October Test 1 |
-| S1 | Baseline + state capacity | "Without data quality" (new Test 1/3/5/7) |
-| **S2** | **Baseline + state capacity + `con_int`** | **Headline, "with data quality" (new Test 2/4/6/8)** |
-| S3 | Baseline + `con_int` | October Test 2 analogue, no state capacity |
-| S4 | Baseline + state capacity + relative precision (`rp`) | Alternative data-quality measure |
-| S5 | Baseline + state capacity + residual data quality | Robustness: `con_int` with the IMR level stripped out |
+| S1 | Baseline | 1) Naive: IMR change ~ EFW treatment |
+| S2 | Baseline + `c_comp` + `pca_comp` | 2) + state capacity; "No DQ control" |
+| **S3** | **Baseline + `c_comp` + `pca_comp` + `con_int`** | **3) Headline; "DQ control: con_int"** |
 
 **Reported contrasts** (bootstrap SE from the same draws):
 
-- **S2 - S1 (headline):** what data quality changes once state capacity is
+- **S3 - S2 (headline):** what data quality changes once state capacity is
   balanced. This is the "residual selection" of Section 2.3.
-- S1 - S0: what state capacity changes.
-- S2 - S0: both together.
-- S3 - S0: data quality without state capacity (links back to October).
+- S2 - S1: what state capacity changes.
+- S3 - S1: both together.
+
+**Two-by-two diagnostic (figure F1).** Rows: liberalizers (pair A) and
+deliberalizers (pair C). Columns: EFW score at $t-5$ above or below that
+year's cross-country median. Treated and comparison countries come from the
+same half and matching is redone within it. Each panel shows S2 ("No DQ
+control") and S3 ("DQ control: con_int") for PSM NN3, PSM kernel and
+Mahalanobis NN3.
 
 Each contrast is also shown as a share of its baseline ATT.
 
@@ -130,9 +166,9 @@ Each contrast is also shown as a share of its baseline ATT.
    ln(IMR), its square and year dummies gives R-squared = 0.875 (state
    capacity adds 0.006). With lagged IMR already matched, `con_int` partly
    duplicates it. Three checks keep the headline honest:
-   - balance tables for `con_int` and lagged IMR under S1 and S2;
-   - S4 (`rp`) and S5 (residual data quality) as robustness;
+   - balance tables for `con_int` and lagged IMR under S2 and S3;
    - a collinearity check (VIF) of the propensity model.
+   (`rp` and the residualized measure were dropped on 19 Nov.)
 3. **Collinearity of state capacity with other covariates.** State capacity
    correlates about 0.66 with Polity5 and about 0.76 with ln GDP per capita.
    Report the VIF and the propensity-score overlap with and without state
@@ -203,6 +239,17 @@ row lose the 2005-10 and 2010-15 windows until those rows are added. Adding
 the 2015-20 window (outcome 2020-24) needs IMR for 2024 (present) and the
 2015 covariates.
 
+## 6b. Data flags from `version16` (19 Nov)
+
+- `hc` holds whole numbers only (1, 2, 3, 4) and `pop` is rounded to whole
+  millions, from `version10` on. In `version9` they had decimals (Chile 1990:
+  hc 2.64, pop 13.27). 65 rows have `pop` = 0, so GDP per capita is missing
+  for them (e.g. Bahamas), and it is distorted for other small countries.
+- `gdppc_5growth` is empty for 1970 (it needs 1965 GDP), so every 1970-75
+  window drops out of the matching. This removes most of the 1970s
+  deliberalizations (12 of 30 survive, against 22 in October).
+- `c_comp` and `pca_comp` correlate at 0.99999.
+
 ## 7. Diagnostics and visualizations (to be tuned after Eric's review)
 
 **Tables:**
@@ -210,19 +257,25 @@ the 2015-20 window (outcome 2020-24) needs IMR for 2024 (present) and the
 - T1: episodes (liberalizations, deliberalizations) by period and country.
 - T2: summary statistics for the common sample.
 - T3: ATT by pair x specification x estimator.
-- T4: contrasts (S2 - S1, S1 - S0, S2 - S0, S3 - S0) with bootstrap SEs.
+- T4: contrasts (S3 - S2 headline, S2 - S1, S3 - S1) with bootstrap SEs.
 - T5: balance (standardized mean differences before and after matching) on
   state capacity, `con_int`, lagged IMR, lagged fertility and Polity5.
+- T6: regression benchmark, IMR change on the continuous EFW change, year
+  fixed effects, country-clustered SEs, same three steps.
+- T7: the two-by-two median split behind figure F1.
 - D1: coverage by year. D2: correlations and VIF. D3: selection logit (are
   liberalizers positively selected on state capacity?).
 
 **Figures:**
 
-- F1: ATT by specification for each pair, with 95% intervals (like the
-  October Figure 1).
-- F2: the headline contrast S2 - S1 for each pair and estimator.
-- F3: balance "love plot" for S1 vs S2.
-- F4: lagged `con_int` against lagged IMR, coloured by state-capacity tercile.
+- F1: two-by-two diagnostic, liberalizers vs deliberalizers by EFW above vs
+  below median, "No DQ control" vs "DQ control: con_int" for each matching
+  method (Section 3).
+- F2: ATT by specification step for each pair, with 95% intervals (like
+  Figure 1 of the notes page).
+- F3: the headline contrast S3 - S2 for each pair and estimator.
+- Still to add: balance "love plot" for S2 vs S3; lagged `con_int` against
+  lagged IMR by state-capacity tercile.
 
 ## 8. Robustness checks and appendix
 
@@ -233,13 +286,13 @@ the 2015-20 window (outcome 2020-24) needs IMR for 2024 (present) and the
 - R1: state capacity measured by V-Dem fiscal capacity (`v2stfisccap`).
 - R2: thresholds of 0.75 and 0.5 EFW points (more episodes; the paper already
   promises the 0.5 test).
-- R3: add the 2015-20 treatment window with a 4-year 2020-24 outcome
-  (scaled to 5 years).
+- R3 (now the appendix): add the 2015-20 treatment window with a 4-year
+  2020-24 outcome (scaled to 5 years).
 - R4: placebo, using the IMR change from $t-10$ to $t-5$ (before the EFW
   window) as the outcome. It should show no "effect".
 - R5: IGME vintage (old ALLDATA IMR vs `version11`).
 - R6: drop the 1970-75 window.
-- R7: fertility options F2-F5.
+- R7: fertility options F2-F5 (not wired into the 19 Nov script).
 - R8: World Bank Statistical Capacity Indicator as the data-quality measure,
   2005-2020 only, once merged.
 
@@ -248,9 +301,15 @@ the 2015-20 window (outcome 2020-24) needs IMR for 2024 (present) and the
 | Matrix cell | Statistic |
 |---|---|
 | Liberalizers select on state capacity (D3/E3) | D3 coefficient on lagged state capacity in the jump logit (positive?) and the drop logit (negative?) |
-| IM ~ Lib + SC, "No change" (J4) | S1 - S0, pair A |
-| IM ~ Lib + SC + DQ, "Up" (K4) | S2 - S1, pair A, positive (a smaller IMR reduction)? |
-| Deliberalizers, "Down" (K6, L6) | S2 - S1, pair C, compared with pair A |
+| IM ~ Lib + SC, "No change" (J4) | S2 - S1, pair A |
+| IM ~ Lib + SC + DQ, "Up" (K4) | S3 - S2, pair A, positive (a smaller IMR reduction)? |
+| Deliberalizers, "Down" (K6, L6) | S3 - S2, pair C, compared with pair A |
+
+## 9b. First run on `version16` (19 Nov, headline 1970-2020)
+
+Results are in `Results/version16/headline_1970-2020/` and
+`Results/version16/appendix_1970-2024/`. They are a first pass on data that
+Eric is still validating; see the data flags in the thread and Section 6b.
 
 ## 10. Project workplan
 
@@ -259,12 +318,15 @@ the 2015-20 window (outcome 2020-24) needs IMR for 2024 (present) and the
 | 1 | Nishant | Complete panel construction | In progress (PWT/WDI done; V-Dem, GDP block, 2015 rows, lags, ISO3, script outstanding) |
 | 2 | Eric, then Claude | Eric spot-checks 10-15 country-years of the matched data; Claude reviews them | Waiting on step 1 |
 | 2b | Eric and Nishant | Follow-up questions if warranted | |
-| 3 | Claude | Draft the R analysis on the final data, specs and this plan | Draft exists (this revision); finalized after steps 1-2 |
+| 3 | Claude | Draft the R analysis on the final data, specs and this plan | 19 Nov: draft reads `version16` and runs; finalized after steps 1-2 |
 | 4 | Eric | Review and modify the R code | Planned this week for the draft |
 | 5 | Claude | Tables and visualizations (Section 7), iterated | After step 4 |
 | 6 | Eric | Update the paper draft | After step 5 |
 
 ## 11. Open questions
 
-1. Headline end year: IMR through 2020 (recommended; no liberalizations after
-   2015) or through 2024 (R3)?
+1. Headline end year: settled 19 Nov, 1970-2020 headline and 2024 in the
+   appendix.
+2. EFW rank analysis: what change in rank counts as a jump? The draft uses a
+   placeholder of 20 percentile points (`RANK_THRESHOLD`), because the number
+   of ranked countries grows from 82 to 153.
