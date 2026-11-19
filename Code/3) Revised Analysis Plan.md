@@ -35,6 +35,8 @@ it compiles through LaTeX.*
   the full sample: F1 compares "No DQ control" with "DQ control: con_int",
   F1b compares "No state capacity control" with "State capacity control:
   c_comp".
+- **Bias-adjusted PSM added** (19 Nov): each PSM estimator is reported
+  plain and bias-adjusted on IMR at $t-5$; formulas in Section 3b.
 
 ## 0a. What changed in the 19 Nov morning revision
 
@@ -180,6 +182,76 @@ Mahalanobis NN3. The earlier split by EFW score above or below the median
 was dropped on 19 Nov.
 
 Each contrast is also shown as a share of its baseline ATT.
+
+## 3b. Estimators in mathematical form (19 Nov)
+
+**Notation.** Window $t-5$ to $t$. $D_i = 1$ if country-window $i$ is a
+liberalization (headline) or a deliberalization (appendix). The outcome is
+the IMR level five years after the window, $Y_i = IMR_{i,t+5}$. $X_i^{(s)}$
+is the vector of matching covariates at $t-5$ for specification
+$s \in \{S1, S2, S3\}$:
+
+$$X_i^{(S1)} = B_{i,t-5}, \qquad
+X_i^{(S2)} = (B_{i,t-5}, SC_{i,t-5}), \qquad
+X_i^{(S3)} = (B_{i,t-5}, SC_{i,t-5}, CI_{i,t-5}),$$
+
+where $B$ holds the baseline covariates (EFW, human capital, ln GDP per
+capita and its square, 5-year GDP growth, fertility, old-age dependency,
+Polity5, urbanization and $M_i \equiv IMR_{i,t-5}$), $SC$ is `c_comp` and
+$CI$ is `con_int` = `IM_upper_bound` - `IM_lower_bound`. $T$ is the set of
+treated windows, $N_1 = |T|$, and $C$ the comparison pool.
+
+**Propensity score.** A logit, estimated separately for each specification:
+
+$$\hat p_i = \Pr(D_i = 1 \mid X_i^{(s)}) = \Lambda(X_i^{(s)\prime}\hat\gamma).$$
+
+**(1) Plain PSM (the estimates shown before 19 Nov, "PSM NN3" and "PSM
+Kernel"):**
+
+$$\widehat{ATT} = \frac{1}{N_1} \sum_{i \in T}
+\Big[ Y_i - \sum_{j \in C} w_{ij} Y_j \Big],$$
+
+with matching weights that sum to one for each treated $i$:
+
+- NN3: $w_{ij} = 1/3$ if $j$ is one of the three controls closest to $i$ in
+  $\hat p$ (with replacement, caliper $0.25\,sd(\hat p)$), and 0 otherwise.
+- Kernel: $w_{ij} = K\big((\hat p_j - \hat p_i)/h\big) /
+  \sum_{k \in C} K\big((\hat p_k - \hat p_i)/h\big)$, with
+  $K(u) = 0.75(1-u^2)\,1\{|u|<1\}$ and $h = 0.06$.
+
+**(2) Bias-adjusted PSM (proposed 19 Nov, "PSM NN3 (BA)" and "PSM Kernel
+(BA)"):** the same weights $w_{ij}$, but each matched control's outcome is
+moved to the treated country's IMR level at $t-5$:
+
+$$\widehat{ATT}^{BA} = \frac{1}{N_1} \sum_{i \in T}
+\Big[ Y_i - \sum_{j \in C} w_{ij}\big( Y_j + \hat\beta (M_i - M_j) \big) \Big],$$
+
+where $\hat\beta$ is the slope from a weighted least squares regression of
+the outcome on IMR at $t-5$ among the matched controls only,
+
+$$Y_j = \alpha + \beta M_j + e_j, \qquad j \in C, \quad
+\text{weights } \omega_j = \sum_{i \in T} w_{ij}.$$
+
+Equivalently,
+
+$$\widehat{ATT}^{BA} = \widehat{ATT} - \hat\beta
+\Big( \bar M_T - \sum_{i \in T}\sum_{j \in C} \tfrac{w_{ij}}{N_1} M_j \Big):$$
+
+the plain estimate minus $\hat\beta$ times the gap in IMR at $t-5$ that
+matching on $\hat p$ leaves between treated countries and their matches.
+With the IMR level as the outcome, $\hat\beta$ is about 0.8 to 0.9 (IMR is
+very persistent), so a leftover gap moves the plain estimate almost one for
+one; this is the source of the plain PSM noise. Example (liberalizers, S2,
+NN3): treated countries' IMR at $t-5$ is 7.6 below their matches',
+$\hat\beta = 0.90$, and the estimate moves from $-11.4$ to
+$-11.4 - 0.90 \times (-7.6) = -4.6$. This is the Abadie and Imbens
+(2011) bias correction, applied with $M$ only; in the script it is
+`Match(..., Z = lag_IM, BiasAdjust = TRUE)` for NN3 and the formula above
+for the kernel.
+
+**(3) Mahalanobis NN3 (BA), unchanged:** matches on the Mahalanobis distance
+in $X_i^{(s)}$ and applies the same correction with the full vector,
+$\hat\beta' (X_i - X_j)$, instead of $\hat\beta (M_i - M_j)$.
 
 ## 4. State capacity and data quality in the headline: endogeneity safeguards
 

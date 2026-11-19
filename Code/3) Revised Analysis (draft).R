@@ -26,6 +26,12 @@
 #                    square, 5-yr GDP pc growth, fertility, old-age
 #                    dependency, Polity5, urbanization, IMR).
 #   Estimators     : PSM NN3, PSM kernel (Epanechnikov), Mahalanobis NN3 (BA).
+#                    Each PSM estimator is also reported bias-adjusted (BA):
+#                    within the matched sample, a regression of the outcome
+#                    on IMR at t-5 among the matched controls corrects each
+#                    match for its remaining gap in IMR at t-5 (Abadie and
+#                    Imbens 2011). Added 19 Nov because, with the IMR level as
+#                    the outcome, plain PSM leaves that gap in the estimate.
 #   Specification sequence:
 #     S1 Naive     : IMR level ~ EFW treatment, baseline covariates
 #     S2 + SC      : + O'Reilly-Murphy state capacity c_comp (only; Eric,
@@ -287,26 +293,55 @@ ps_fit <- function(df, treatment, covars) {
   suppressWarnings(fitted(glm(f, data = df, family = binomial(link = "logit"))))
 }
 
-att_nn3 <- function(df, treatment, ps, y = OUTCOME) {
-  m <- tryCatch(Match(Y = df[[y]], Tr = df[[treatment]], X = ps, M = 3,
-                      estimand = "ATT", caliper = psm_caliper, replace = TRUE,
-                      CommonSupport = TRUE),
+# BA_VAR: the covariate the bias-adjusted PSM estimators regress on
+BA_VAR <- "lag_IM"
+
+att_nn3 <- function(df, treatment, ps, y = OUTCOME, ba = FALSE) {
+  m <- tryCatch(if (ba)
+                  Match(Y = df[[y]], Tr = df[[treatment]], X = ps, Z = df[[BA_VAR]],
+                        M = 3, estimand = "ATT", caliper = psm_caliper,
+                        replace = TRUE, CommonSupport = TRUE, BiasAdjust = TRUE)
+                else
+                  Match(Y = df[[y]], Tr = df[[treatment]], X = ps, M = 3,
+                        estimand = "ATT", caliper = psm_caliper, replace = TRUE,
+                        CommonSupport = TRUE),
                 error = function(e) NULL)
   if (!is.list(m) || length(m$est) == 0) return(list(att = NA_real_, m = NULL))
+  # With CommonSupport = TRUE, Match() drops rows outside the common support
+  # and its index.treated / index.control refer to the TRIMMED data. Keep the
+  # map back to rows of df (needed for balance tables).
+  tr <- df[[treatment]] == 1
+  lo <- max(min(ps[tr]), min(ps[!tr])); hi <- min(max(ps[tr]), max(ps[!tr]))
+  m$rows <- which(ps >= lo & ps <= hi)
   list(att = as.numeric(m$est), m = m)
 }
 
-att_kernel <- function(df, treatment, ps, y = OUTCOME) {
+att_kernel <- function(df, treatment, ps, y = OUTCOME, ba = FALSE) {
   tr <- df[[treatment]] == 1
-  yy <- df[[y]]
+  yy <- df[[y]]; zz <- df[[BA_VAR]]
   ps_t <- ps[tr]; ps_c <- ps[!tr]; y_t <- yy[tr]; y_c <- yy[!tr]
+  z_t <- zz[tr]; z_c <- zz[!tr]
   on_support <- ps_t >= min(ps_c) & ps_t <= max(ps_c)
-  cf <- vapply(ps_t, function(p) {
+  # Normalized kernel weights: row i = treated, column j = control
+  W <- t(vapply(ps_t, function(p) {
     u <- (ps_c - p) / kernel_bw
     w <- ifelse(abs(u) < 1, 0.75 * (1 - u^2), 0)
-    if (sum(w) == 0) NA_real_ else sum(w * y_c) / sum(w)
-  }, numeric(1))
-  keep <- on_support & !is.na(cf)
+    if (sum(w) == 0) rep(NA_real_, length(w)) else w / sum(w)
+  }, numeric(length(ps_c))))
+  ok_row <- on_support & !is.na(W[, 1])
+  beta <- 0
+  if (ba && any(ok_row)) {
+    # Regression of the outcome on IMR(t-5) among matched controls, weighted
+    # by the total kernel weight each control receives
+    wc <- colSums(W[ok_row, , drop = FALSE])
+    use <- wc > 0
+    if (sum(use) > 2)
+      beta <- unname(coef(lm(y_c[use] ~ z_c[use], weights = wc[use]))[2])
+  }
+  # Counterfactual: weighted control outcomes, shifted by beta times the
+  # treated-control gap in IMR(t-5) (beta = 0 without bias adjustment)
+  cf <- as.numeric(W %*% y_c) + beta * (z_t - as.numeric(W %*% z_c))
+  keep <- ok_row & !is.na(cf)
   list(att = if (any(keep)) mean(y_t[keep] - cf[keep]) else NA_real_,
        n_treated = sum(keep))
 }
@@ -339,15 +374,21 @@ estimate_specs <- function(df, treatment, y = OUTCOME) {
     ps <- ps_fit(df, treatment, cv)
     nn <- att_nn3(df, treatment, ps, y)
     list(nn3 = nn$att, nn3_match = nn$m,
+         nn3_ba = att_nn3(df, treatment, ps, y, ba = TRUE)$att,
          kernel = att_kernel(df, treatment, ps, y)$att,
+         kernel_ba = att_kernel(df, treatment, ps, y, ba = TRUE)$att,
          mah = att_mah(df, treatment, cv, y))
   })
 }
 
+psm_ests <- c("nn3", "nn3_ba", "kernel", "kernel_ba")
+psm_names <- c(nn3 = "PSM NN3", nn3_ba = "PSM NN3 (BA)", kernel = "PSM Kernel",
+               kernel_ba = "PSM Kernel (BA)")
+
 cluster_boot <- function(df, treatment, y = OUTCOME, B = B_BOOT) {
   countries <- unique(df$country)
   idx <- split(seq_len(nrow(df)), df$country)
-  cols <- paste(rep(names(specs), each = 2), c("nn3", "kernel"), sep = ".")
+  cols <- paste(rep(names(specs), each = 4), psm_ests, sep = ".")
   res <- matrix(NA_real_, B, length(cols), dimnames = list(NULL, cols))
   set.seed(SEED)
   for (b in seq_len(B)) {
@@ -357,14 +398,17 @@ cluster_boot <- function(df, treatment, y = OUTCOME, B = B_BOOT) {
     for (s in names(specs)) {
       ps <- tryCatch(ps_fit(db, treatment, specs[[s]]), error = function(e) NULL)
       if (is.null(ps)) next
-      res[b, paste0(s, ".nn3")]    <- att_nn3(db, treatment, ps, y)$att
-      res[b, paste0(s, ".kernel")] <- att_kernel(db, treatment, ps, y)$att
+      res[b, paste0(s, ".nn3")]       <- att_nn3(db, treatment, ps, y)$att
+      res[b, paste0(s, ".nn3_ba")]    <- att_nn3(db, treatment, ps, y, ba = TRUE)$att
+      res[b, paste0(s, ".kernel")]    <- att_kernel(db, treatment, ps, y)$att
+      res[b, paste0(s, ".kernel_ba")] <- att_kernel(db, treatment, ps, y, ba = TRUE)$att
     }
   }
   res
 }
 
 smd_matched <- function(x, m) {
+  if (!is.null(m$rows)) x <- x[m$rows]   # PSM NN3: indices are on trimmed data
   (weighted.mean(x[m$index.treated], m$weights) -
      weighted.mean(x[m$index.control], m$weights)) / sd(x[unique(m$index.treated)])
 }
@@ -472,10 +516,10 @@ run_all <- function(y) {
 att_rows <- function(r, s) {
   e <- r$est[[s]]
   data.frame(spec = s, label = spec_labels[[s]],
-             estimator = c("PSM NN3", "PSM Kernel", "Mahalanobis NN3 (BA)"),
-             att = c(e$nn3, e$kernel, e$mah$att),
-             se  = c(sd(r$boot[, paste0(s, ".nn3")], na.rm = TRUE),
-                     sd(r$boot[, paste0(s, ".kernel")], na.rm = TRUE),
+             estimator = c(psm_names[psm_ests], "Mahalanobis NN3 (BA)"),
+             att = c(sapply(psm_ests, function(k) e[[k]]), e$mah$att),
+             se  = c(sapply(psm_ests, function(k)
+                       sd(r$boot[, paste0(s, ".", k)], na.rm = TRUE)),
                      e$mah$se),
              n_treated = r$n_treated, n = nrow(r$df))
 }
@@ -496,7 +540,7 @@ contrast_table <- function(results) {
     if (is.null(r)) return(NULL)
     do.call(rbind, lapply(names(contrasts), function(k) {
       a <- contrasts[[k]][1]; b <- contrasts[[k]][2]
-      do.call(rbind, lapply(c("nn3", "kernel"), function(est) {
+      do.call(rbind, lapply(psm_ests, function(est) {
         d_hat <- r$est[[a]][[est]] - r$est[[b]][[est]]
         d_bt  <- r$boot[, paste0(a, ".", est)] - r$boot[, paste0(b, ".", est)]
         data.frame(pair = p, contrast = k, estimator = est, diff = d_hat,
@@ -557,7 +601,8 @@ write.csv(sumstats, file.path(tab_dir, "T2_summary_statistics.csv"), row.names =
 #         "State capacity control" (S2); neither controls for data quality
 
 side_names <- c(A = "Liberalizers (headline)", C = "Deliberalizers (appendix)")
-est_levels <- c("Mahalanobis NN3 (BA)", "PSM Kernel", "PSM NN3")
+est_levels <- c("Mahalanobis NN3 (BA)", "PSM Kernel (BA)", "PSM Kernel",
+                "PSM NN3 (BA)", "PSM NN3")
 
 lib_delib_tab <- att_main %>% filter(pair %in% names(side_names))
 write.csv(lib_delib_tab, file.path(tab_dir, "T7_liberalizers_vs_deliberalizers.csv"),
@@ -570,6 +615,9 @@ n_lab <- lib_delib_tab %>% group_by(pair) %>%
 
 # spec_map: named vector, spec code -> legend label (first = without the
 # control, second = with it)
+ba_note <- paste0("BA = bias-adjusted. PSM (BA): regression on IMR at t-5 within the matched sample.\n",
+                  "Mahalanobis (BA): regression on all matching covariates.")
+
 plot_sides <- function(spec_map, cols, note, file) {
   g <- lib_delib_tab %>%
     filter(spec %in% names(spec_map)) %>%
@@ -589,12 +637,12 @@ plot_sides <- function(spec_map, cols, note, file) {
     labs(title = paste("Effect of", treat_text, "on the", out_lab$what),
          subtitle = paste0("ATT in deaths per 1,000 live births with 95% CI, ",
                            if (APPENDIX_2024) "1970-2024 (appendix)" else "1970-2020",
-                           ". ", out_lab$sign, "\n", note),
+                           ". ", out_lab$sign, "\n", note, "\n", ba_note),
          x = out_lab$axis, y = NULL, colour = NULL) +
     theme_minimal(base_size = 11) +
     theme(legend.position = "bottom", strip.text = element_text(face = "bold"),
           plot.title = element_text(face = "bold"), panel.spacing = unit(1.5, "lines"))
-  ggsave(file.path(fig_dir, file), f, width = 10, height = 4.8, dpi = 200)
+  ggsave(file.path(fig_dir, file), f, width = 10, height = 6.4, dpi = 200)
   invisible(f)
 }
 
@@ -634,7 +682,7 @@ f2 <- att_main %>%
        x = out_lab$axis, y = NULL, colour = NULL) +
   theme_minimal(base_size = 11) +
   theme(legend.position = "bottom", strip.text = element_text(face = "bold", hjust = 0))
-ggsave(file.path(fig_dir, "F2_att_by_spec_step.png"), f2, width = 9, height = 9, dpi = 200)
+ggsave(file.path(fig_dir, "F2_att_by_spec_step.png"), f2, width = 9, height = 12, dpi = 200)
 
 f3 <- con_main %>% filter(contrast == "dq_given_sc") %>%
   mutate(pair = factor(pair_names[pair], levels = rev(pair_names))) %>%
