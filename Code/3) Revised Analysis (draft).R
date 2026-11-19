@@ -523,8 +523,11 @@ write.csv(sumstats, file.path(tab_dir, "T2_summary_statistics.csv"), row.names =
 # Rows: liberalizers (pair A) and deliberalizers (pair C). Columns: EFW at
 # t-5 above or below that year's median. Treated and comparison countries are
 # both drawn from the same half, and matching is redone within the half.
-# Each panel compares "No DQ control" (S2: naive + state capacity) with
-# "DQ control: con_int" (S3, headline) for each matching method.
+# Two versions of the figure:
+#   F1  : "No DQ control" (S2: naive + state capacity) vs
+#         "DQ control: con_int" (S3, headline)
+#   F1b : "No state capacity control" (S1, naive) vs
+#         "State capacity control" (S2); neither controls for data quality
 
 halves <- c("EFW score above median", "EFW score below median")
 grid_res <- list()
@@ -547,23 +550,13 @@ grid_tab <- do.call(rbind, lapply(names(grid_res), function(k) {
                       n = NA))
   }
   cbind(pair = pp[1], half = pp[2],
-        do.call(rbind, lapply(c("S2", "S3"), function(s) att_rows(r, s))))
+        do.call(rbind, lapply(names(specs), function(s) att_rows(r, s))))
 }))
 write.csv(grid_tab, file.path(tab_dir, "T7_two_by_two_median_split.csv"),
           row.names = FALSE)
 
-dq_cols <- c("No DQ control" = "#2a6fdb", "DQ control: con_int" = "#e8613a")
 est_levels <- c("Mahalanobis NN3 (BA)", "PSM Kernel", "PSM NN3")
 
-g <- grid_tab %>%
-  filter(!is.na(spec)) %>%
-  mutate(dq = factor(if_else(spec == "S2", "No DQ control", "DQ control: con_int"),
-                     levels = names(dq_cols)),
-         row = factor(if_else(pair == "A", "Liberalizers", "Deliberalizers"),
-                      levels = c("Liberalizers", "Deliberalizers")),
-         half = factor(half, levels = halves),
-         estimator = factor(estimator, levels = est_levels),
-         lo = att - 1.96 * se, hi = att + 1.96 * se)
 n_lab <- grid_tab %>% group_by(pair, half) %>%
   summarise(n_treated = first(n_treated), n = first(n), .groups = "drop") %>%
   mutate(row = factor(if_else(pair == "A", "Liberalizers", "Deliberalizers"),
@@ -572,27 +565,49 @@ n_lab <- grid_tab %>% group_by(pair, half) %>%
          lab = paste0(n_treated, " treated", if_else(is.na(n), " (too few to match)",
                                                      paste0(", ", n, " obs"))))
 
-f_grid <- ggplot(g, aes(x = att, y = estimator, colour = dq)) +
-  geom_vline(xintercept = 0, colour = "grey30") +
-  geom_errorbar(aes(xmin = lo, xmax = hi), width = 0, orientation = "y", linewidth = 0.7,
-                 position = position_dodge(width = 0.55)) +
-  geom_point(size = 2.6, position = position_dodge(width = 0.55)) +
-  geom_text(data = n_lab, aes(x = Inf, y = Inf, label = lab), inherit.aes = FALSE,
-            hjust = 1.05, vjust = 1.4, size = 3, colour = "grey35") +
-  facet_grid(row ~ half, scales = "free_x") +
-  scale_colour_manual(values = dq_cols, drop = FALSE) +
-  labs(title = "Effect of a 1-point EFW change on the IMR change over the next 5 years",
-       subtitle = paste0("ATT in deaths per 1,000 live births with 95% CI, ",
-                         if (APPENDIX_2024) "1970-2024 (appendix)" else "1970-2020",
-                         ". Negative = IMR fell faster than in matched controls.\n",
-                         "Both specifications control for state capacity (", paste(SC_VARS, collapse = ", "), "). ",
-                         "EFW halves split at each year's median EFW at t-5."),
-       x = "ATT (change in IMR, per 1,000)", y = NULL, colour = NULL) +
-  theme_minimal(base_size = 11) +
-  theme(legend.position = "bottom", strip.text = element_text(face = "bold"),
-        plot.title = element_text(face = "bold"), panel.spacing = unit(1.2, "lines"))
-ggsave(file.path(fig_dir, "F1_two_by_two_dq_median_split.png"), f_grid,
-       width = 10, height = 7, dpi = 200)
+# spec_map: named vector, spec code -> legend label (first = without the
+# control, second = with it)
+plot_grid <- function(spec_map, cols, note, file) {
+  g <- grid_tab %>%
+    filter(spec %in% names(spec_map)) %>%
+    mutate(ctrl = factor(spec_map[spec], levels = spec_map),
+           row = factor(if_else(pair == "A", "Liberalizers", "Deliberalizers"),
+                        levels = c("Liberalizers", "Deliberalizers")),
+           half = factor(half, levels = halves),
+           estimator = factor(estimator, levels = est_levels),
+           lo = att - 1.96 * se, hi = att + 1.96 * se)
+  f <- ggplot(g, aes(x = att, y = estimator, colour = ctrl)) +
+    geom_vline(xintercept = 0, colour = "grey30") +
+    geom_errorbar(aes(xmin = lo, xmax = hi), width = 0, orientation = "y",
+                  linewidth = 0.7, position = position_dodge(width = 0.55)) +
+    geom_point(size = 2.6, position = position_dodge(width = 0.55)) +
+    geom_text(data = n_lab, aes(x = Inf, y = Inf, label = lab), inherit.aes = FALSE,
+              hjust = 1.05, vjust = 1.4, size = 3, colour = "grey35") +
+    facet_grid(row ~ half, scales = "free_x") +
+    scale_colour_manual(values = setNames(cols, spec_map), drop = FALSE) +
+    labs(title = "Effect of a 1-point EFW change on the IMR change over the next 5 years",
+         subtitle = paste0("ATT in deaths per 1,000 live births with 95% CI, ",
+                           if (APPENDIX_2024) "1970-2024 (appendix)" else "1970-2020",
+                           ". Negative = IMR fell faster than in matched controls.\n",
+                           note, " EFW halves split at each year's median EFW at t-5."),
+         x = "ATT (change in IMR, per 1,000)", y = NULL, colour = NULL) +
+    theme_minimal(base_size = 11) +
+    theme(legend.position = "bottom", strip.text = element_text(face = "bold"),
+          plot.title = element_text(face = "bold"), panel.spacing = unit(1.2, "lines"))
+  ggsave(file.path(fig_dir, file), f, width = 10, height = 7, dpi = 200)
+  invisible(f)
+}
+
+sc_name <- paste(SC_VARS, collapse = ", ")
+plot_grid(c(S2 = "No DQ control", S3 = "DQ control: con_int"),
+          c("#2a6fdb", "#e8613a"),
+          paste0("Both specifications control for state capacity (", sc_name, ")."),
+          "F1_two_by_two_dq_median_split.png")
+plot_grid(c(S1 = "No state capacity control",
+            S2 = paste0("State capacity control: ", sc_name)),
+          c("#8a8a8a", "#2a6fdb"),
+          "Neither specification controls for data quality (con_int).",
+          "F1b_two_by_two_sc_median_split.png")
 
 
 # =============================================================================

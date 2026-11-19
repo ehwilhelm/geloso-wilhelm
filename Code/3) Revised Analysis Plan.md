@@ -278,6 +278,8 @@ the 2015-20 window (outcome 2020-24) needs IMR for 2024 (present) and the
 - F1: two-by-two diagnostic, liberalizers vs deliberalizers by EFW above vs
   below median, "No DQ control" vs "DQ control: con_int" for each matching
   method (Section 3).
+- F1b: the same two-by-two for step 2 without any data-quality control:
+  "No state capacity control" (S1) vs "State capacity control: c_comp" (S2).
 - F2: ATT by specification step for each pair, with 95% intervals (like
   Figure 1 of the notes page).
 - F3: the headline contrast S3 - S2 for each pair and estimator.
