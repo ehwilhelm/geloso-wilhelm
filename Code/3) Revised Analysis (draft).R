@@ -79,10 +79,16 @@ DATA_FILE <- Sys.getenv("REVISED_CSV",
 APPENDIX_2024 <- as.logical(Sys.getenv("APPENDIX_2024", "FALSE"))
 
 OUTCOME     <- "change_IM_post" # headline (C&Y). A1: "IM_post". A2: "change_IM"
-TREAT_SCALE <- "score"          # "score" (main) | "rank" (separate analysis)
-THRESHOLD   <- 1                # EFW points: >= +1 liberalizer, <= -1 deliberalizer
-RANK_THRESHOLD <- 0.20          # TODO(Eric): rank analysis only. Change in the
-                                # percentile rank (0-1) that counts as a jump.
+# TREAT_SCALE (set with Sys.setenv(TREAT_SCALE = "...")):
+#   "score"     main: change in EFW score of >= +1 / <= -1 points
+#   "score_pct" change in EFW score of >= +20% / <= -20% of its t-5 level
+#   "rank"      separate analysis: change in EFW percentile rank of >= 20
+#               percentile points up / down (rank 1 = freest; the number of
+#               ranked countries grows from 82 to 153, hence percentiles)
+TREAT_SCALE <- Sys.getenv("TREAT_SCALE", "score")
+THRESHOLD      <- 1      # "score": EFW points
+PCT_THRESHOLD  <- 0.20   # "score_pct": share of the t-5 EFW score (Eric, 19 Nov)
+RANK_THRESHOLD <- 0.20   # "rank": percentile points of the ranking (Eric, 19 Nov)
 
 SC_VARS <- "c_comp"     # O'Reilly-Murphy ISC. Alternative: "pca_comp" (r = 0.99999);
                         # never both in one specification (Eric, 19 Nov)
@@ -99,7 +105,8 @@ grid_years <- c(seq(1970, 2020, 5), if (APPENDIX_2024) 2024)
 # grid_years gets 1965 added below if the panel has 1965 rows (growth only)
 
 run_tag <- paste0(if (APPENDIX_2024) "appendix_1970-2024" else "headline_1970-2020",
-                  if (TREAT_SCALE == "rank") "_rank" else "")
+                  switch(TREAT_SCALE, score = "", score_pct = "_score20pct",
+                         rank = "_rank20pct"))
 out_dir <- file.path(root, "Results", "version16", run_tag)
 tab_dir <- file.path(out_dir, "tables")
 fig_dir <- file.path(out_dir, "figures")
@@ -157,6 +164,7 @@ panel <- raw %>%
     # Treatment inputs
     EFWdiff   = EFW - lag(EFW),
     EFWrdiff  = -(EFW_prank - lag(EFW_prank)),   # > 0 = moved up the ranking
+    EFWpdiff  = EFWdiff / lag(EFW),               # relative change in score
     # Covariates at t-5
     lagEFW          = lag(EFW),
     laghc           = lag(hc),
@@ -192,8 +200,14 @@ cy_blank <- function(x) {
   x
 }
 
-treat_diff <- if (TREAT_SCALE == "rank") "EFWrdiff" else "EFWdiff"
-treat_cut  <- if (TREAT_SCALE == "rank") RANK_THRESHOLD else THRESHOLD
+treat_diff <- switch(TREAT_SCALE, score = "EFWdiff", score_pct = "EFWpdiff",
+                     rank = "EFWrdiff")
+treat_cut  <- switch(TREAT_SCALE, score = THRESHOLD, score_pct = PCT_THRESHOLD,
+                     rank = RANK_THRESHOLD)
+treat_text <- switch(TREAT_SCALE,
+  score     = "a 1-point EFW change",
+  score_pct = "a 20% EFW score change",
+  rank      = "a 20-percentile-point EFW rank change")
 
 panel <- panel %>%
   arrange(country, year) %>%
@@ -221,6 +235,8 @@ episodes <- panel %>%
   transmute(country, period = paste0(year - window, "-", year),
             type = if_else(EFWjump %in% 1, "Liberalization", "Deliberalization"),
             EFW_start = round(lagEFW, 2), EFW_change = round(EFWdiff, 2),
+            EFW_pct_change = round(EFWpdiff, 3),
+            pctile_rank_change = round(EFWrdiff, 3),
             efw_half)
 write.csv(episodes, file.path(tab_dir, "T1_episodes.csv"), row.names = FALSE)
 
@@ -585,7 +601,7 @@ plot_grid <- function(spec_map, cols, note, file) {
               hjust = 1.05, vjust = 1.4, size = 3, colour = "grey35") +
     facet_grid(row ~ half, scales = "free_x") +
     scale_colour_manual(values = setNames(cols, spec_map), drop = FALSE) +
-    labs(title = "Effect of a 1-point EFW change on the IMR change over the next 5 years",
+    labs(title = paste("Effect of", treat_text, "on the IMR change over the next 5 years"),
          subtitle = paste0("ATT in deaths per 1,000 live births with 95% CI, ",
                            if (APPENDIX_2024) "1970-2024 (appendix)" else "1970-2020",
                            ". Negative = IMR fell faster than in matched controls.\n",
@@ -652,7 +668,7 @@ ggsave(file.path(fig_dir, "F3_headline_contrast.png"), f3, width = 9, height = 4
 # Part 10: Robustness hooks (plan section 8; change a setting and rerun)
 # =============================================================================
 # Appendix 2024 : Sys.setenv(APPENDIX_2024 = "TRUE") and rerun
-# EFW rank      : TREAT_SCALE <- "rank" (threshold RANK_THRESHOLD, to decide)
+# 20% thresholds: Sys.setenv(TREAT_SCALE = "score_pct") or "rank"
 # A1 / A2       : OUTCOME <- "IM_post" / "change_IM"
 # Threshold     : THRESHOLD <- 0.75 or 0.5
 

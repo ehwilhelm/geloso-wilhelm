@@ -34,6 +34,10 @@ it compiles through LaTeX.*
   deliberalizers by EFW score above vs below the median, each panel comparing
   "No DQ control" (step 2) with "DQ control: con_int" (step 3) for each
   matching method, in the style of Figure 1 of the notes page.
+- **20% thresholds (19 Nov pm):** both two-by-two figures are also produced
+  for jumps and drops of 20% or more, as a percentile-rank change and as a
+  relative score change. Outputs in `Results/version16/*_rank20pct/` and
+  `*_score20pct/`.
 - **Regression benchmark:** OLS of the IMR change on the continuous EFW change
   with year fixed effects, adding the same three steps (table T6).
 
@@ -336,6 +340,9 @@ Eric is still validating; see the data flags in the thread and Section 6b.
 
 1. Headline end year: settled 19 Nov, 1970-2020 headline and 2024 in the
    appendix.
-2. EFW rank analysis: what change in rank counts as a jump? The draft uses a
-   placeholder of 20 percentile points (`RANK_THRESHOLD`), because the number
-   of ranked countries grows from 82 to 153.
+2. EFW rank analysis threshold: Eric asked (19 Nov) for jumps and drops of
+   20% or more in magnitude. Two readings are run: a change in EFW
+   percentile rank of 20 points or more (`TREAT_SCALE = "rank"`; percentiles
+   because the number of ranked countries grows from 82 to 153) and a change
+   in the EFW score of 20% or more of its $t-5$ level
+   (`TREAT_SCALE = "score_pct"`). To confirm which one he meant.
