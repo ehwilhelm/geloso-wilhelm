@@ -1,5 +1,6 @@
 # =============================================================================
 # 3) Revised Analysis (draft).R      DRAFT, 19 Nov 2026 - reads version16.csv
+#                                    Outcome switched to IMR LEVELS (19 Nov pm)
 #
 # Companion to "3) Revised Analysis Plan.md" (read that first).
 #
@@ -9,28 +10,44 @@
 # Design (Eric, 18-19 Nov 2026):
 #   Main regressor : 5-year change in the EFW summary index
 #                    ("ECONOMIC FREEDOM ALL AREAS"). Change in EFW rank is a
-#                    separate analysis (Part 10, switch TREAT_SCALE).
+#                    separate analysis (switch TREAT_SCALE; threshold to
+#                    be decided).
 #   Treatment      : liberalizer   = EFW change over t-5..t >= +1
 #                    deliberalizer = EFW change over t-5..t <= -1
 #                    Callais & Young adjacency blanking; Venezuela 2000 out.
-#   Outcome        : Callais & Young timing, IMR(t+5) - IMR(t), deaths per
-#                    1,000 live births ("infantmortality", UN IGME).
-#                    Robustness: A1 IMR level at t+5; A2 IMR(t) - IMR(t-5).
+#   Outcome        : IMR LEVEL (Eric, 19 Nov pm, replaces the IMR change):
+#                    infant deaths per 1,000 live births ("infantmortality",
+#                    UN IGME) at t+5, five years after the EFW window t-5..t
+#                    (Callais & Young timing kept). OUTCOME = "IM_post".
+#                    Alternative: "IM_t", the level at the end of the window.
+#                    The earlier change outcomes stay available as settings:
+#                    "change_IM_post" (t..t+5) and "change_IM" (t-5..t).
 #   Covariates     : at t-5, same set as before (EFW, hc, ln GDP pc and its
 #                    square, 5-yr GDP pc growth, fertility, old-age
 #                    dependency, Polity5, urbanization, IMR).
 #   Estimators     : PSM NN3, PSM kernel (Epanechnikov), Mahalanobis NN3 (BA).
+#                    Each PSM estimator is also reported bias-adjusted (BA):
+#                    within the matched sample, a regression of the outcome
+#                    on IMR at t-5 among the matched controls corrects each
+#                    match for its remaining gap in IMR at t-5 (Abadie and
+#                    Imbens 2011). Added 19 Nov because, with the IMR level as
+#                    the outcome, plain PSM leaves that gap in the estimate.
 #   Specification sequence:
-#     S1 Naive     : IMR change ~ EFW treatment, baseline covariates
-#     S2 + SC      : + O'Reilly-Murphy state capacity c_comp and pca_comp
+#     S1 Naive     : IMR level ~ EFW treatment, baseline covariates
+#     S2 + SC      : + O'Reilly-Murphy state capacity c_comp (only; Eric,
+#                    19 Nov: c_comp and pca_comp never in the same spec)
 #     S3 Headline  : + con_int = IM_upper_bound - IM_lower_bound (data quality)
 #     Relative precision (rp) is dropped from the analysis.
 #   Sample         : headline 1970-2020 (last EFW window 2010-15, outcome
 #                    2015-20). Appendix: extension to 2024 (APPENDIX_2024).
 #
 # Data notes for version16.csv:
-#   - totalpop and totalGDP are empty for 2020 and 2024, so GDP per capita is
-#     rebuilt here as rgdpe / pop (Eric, 19 Nov).
+#   - GDP per capita is the panel's `gdppc` column (Our World in Data, per
+#     Eric 19 Nov); GDP_SOURCE = "rgdpe_pop" rebuilds it from PWT instead.
+#     In version16 `gdppc` still equals rgdpe / pop exactly in every row.
+#   - 5-yr GDP pc growth at 1970 needs 1965 GDP pc. If the panel has 1965
+#     rows, they are read and used for that growth (and nothing else is
+#     estimated on them), which brings the 1970-75 EFW windows back.
 #   - PWT has no 2024 release yet: the 2024 rows carry 2023 PWT values.
 #   - Polity5 ends in 2018; the 2018 value stands in for 2020 and later.
 #   - The panel's lag* columns are not used; all lags are rebuilt here.
@@ -73,13 +90,26 @@ DATA_FILE <- Sys.getenv("REVISED_CSV",
 # Set from the command line with Sys.setenv(APPENDIX_2024 = "TRUE").
 APPENDIX_2024 <- as.logical(Sys.getenv("APPENDIX_2024", "FALSE"))
 
-OUTCOME     <- "change_IM_post" # headline (C&Y). A1: "IM_post". A2: "change_IM"
-TREAT_SCALE <- "score"          # "score" (main) | "rank" (separate analysis)
-THRESHOLD   <- 1                # EFW points: >= +1 liberalizer, <= -1 deliberalizer
-RANK_THRESHOLD <- 0.20          # TODO(Eric): rank analysis only. Change in the
-                                # percentile rank (0-1) that counts as a jump.
+# OUTCOME (set with Sys.setenv(OUTCOME = "...")):
+#   "IM_post"        headline: IMR level at t+5 (for the appendix's 2015-20
+#                    window this is the 2024 level, 4 years after)
+#   "IM_t"           IMR level at t, the end of the EFW window
+#   "change_IM_post" earlier outcome: IMR(t+5) - IMR(t)
+#   "change_IM"      earlier outcome: IMR(t) - IMR(t-5)
+OUTCOME <- Sys.getenv("OUTCOME", "IM_post")
+# TREAT_SCALE: "score" (main, EFW score change of >= +1 / <= -1 points) or
+#   "rank" (separate analysis on the EFW percentile rank; rank 1 = freest).
+#   The 20% rank and 20% score runs were dropped on 19 Nov; the rank
+#   threshold is still to be decided.
+TREAT_SCALE <- Sys.getenv("TREAT_SCALE", "score")
+THRESHOLD      <- 1      # "score": EFW points
+RANK_THRESHOLD <- NA     # "rank": percentile points of the ranking, TO DECIDE
+if (TREAT_SCALE == "rank" && is.na(RANK_THRESHOLD))
+  stop("Set RANK_THRESHOLD before running the rank analysis.")
 
-SC_VARS <- c("c_comp", "pca_comp")  # O'Reilly-Murphy ISC (V-Dem based)
+SC_VARS <- "c_comp"     # O'Reilly-Murphy ISC. Alternative: "pca_comp" (r = 0.99999);
+                        # never both in one specification (Eric, 19 Nov)
+GDP_SOURCE <- "gdppc"   # "gdppc" (panel column, OWID) | "rgdpe_pop" (PWT)
 FERT_OPTION <- "F1"                 # F1 keep lagged fertility (decided 18 Nov)
 
 B_BOOT      <- as.integer(Sys.getenv("B_BOOT", "200"))
@@ -89,9 +119,26 @@ kernel_bw   <- 0.06
 
 END_YEAR   <- if (APPENDIX_2024) 2024 else 2020
 grid_years <- c(seq(1970, 2020, 5), if (APPENDIX_2024) 2024)
+# grid_years gets 1965 added below if the panel has 1965 rows (growth only)
 
 run_tag <- paste0(if (APPENDIX_2024) "appendix_1970-2024" else "headline_1970-2020",
+                  if (OUTCOME == "IM_post") "" else paste0("_", OUTCOME),
                   if (TREAT_SCALE == "rank") "_rank" else "")
+
+# Labels that follow the outcome
+out_lab <- switch(OUTCOME,
+  IM_post        = list(what = "IMR level 5 years after the EFW window",
+                        axis = "ATT (IMR level at t+5, per 1,000)",
+                        sign = "Negative = IMR lower than in matched controls."),
+  IM_t           = list(what = "IMR level at the end of the EFW window",
+                        axis = "ATT (IMR level at t, per 1,000)",
+                        sign = "Negative = IMR lower than in matched controls."),
+  change_IM_post = list(what = "IMR change over the next 5 years",
+                        axis = "ATT (change in IMR t to t+5, per 1,000)",
+                        sign = "Negative = IMR fell faster than in matched controls."),
+  change_IM      = list(what = "IMR change over the EFW window",
+                        axis = "ATT (change in IMR t-5 to t, per 1,000)",
+                        sign = "Negative = IMR fell faster than in matched controls."))
 out_dir <- file.path(root, "Results", "version16", run_tag)
 tab_dir <- file.path(out_dir, "tables")
 fig_dir <- file.path(out_dir, "figures")
@@ -100,16 +147,20 @@ dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
 
 
 # =============================================================================
-# Part 1: Load, build GDP per capita from rgdpe/pop, complete grid, lags
+# Part 1: Load, GDP per capita, complete grid, lags
 # =============================================================================
 
 raw <- read.csv(DATA_FILE, check.names = FALSE, stringsAsFactors = FALSE,
                 fileEncoding = "latin1")
 cat(sprintf("Loaded %s: %d rows x %d cols\n", basename(DATA_FILE),
             nrow(raw), ncol(raw)))
+if (any(raw$year == 1965)) {
+  grid_years <- c(1965, grid_years)
+  cat("1965 rows found: used for the 1965-70 GDP pc growth covariate.\n")
+}
 
 level_vars <- c("infantmortality", "IM_lower_bound", "IM_upper_bound",
-                "EFW", "EFW_rank", "rgdpe", "pop", "hc", "fertilrate",
+                "EFW", "EFW_rank", "gdppc", "rgdpe", "pop", "hc", "fertilrate",
                 "oldagedep", "polity5", "urbanpop", SC_VARS)
 
 panel <- raw %>%
@@ -128,8 +179,9 @@ panel <- raw %>%
   ) %>%
   group_by(country) %>%
   mutate(
-    # GDP per capita from PWT rgdpe and pop (totalGDP/totalpop end in 2015)
-    gdppc   = if_else(pop > 0, rgdpe / pop, NA_real_),
+    # GDP per capita: panel column (OWID) or PWT rgdpe / pop
+    gdppc   = if (GDP_SOURCE == "rgdpe_pop") if_else(pop > 0, rgdpe / pop, NA_real_)
+              else gdppc,
     lngdppc = log(gdppc),
     lngdppc2 = lngdppc^2,
     window      = year - lag(year),       # 5 (4 for 2020-2024)
@@ -139,7 +191,8 @@ panel <- raw %>%
     con_int = IM_upper_bound - IM_lower_bound,
     # Outcomes (C&Y timing: treatment over t-5..t, outcome over t..t+5)
     change_IM_post = (lead(infantmortality) - infantmortality) * 5 / window_next,
-    IM_post        = lead(infantmortality),                              # A1
+    IM_post        = lead(infantmortality),          # headline: level at t+5
+    IM_t           = infantmortality,                # level at t
     change_IM      = (infantmortality - lag(infantmortality)) * 5 / window, # A2
     # Treatment inputs
     EFWdiff   = EFW - lag(EFW),
@@ -181,6 +234,8 @@ cy_blank <- function(x) {
 
 treat_diff <- if (TREAT_SCALE == "rank") "EFWrdiff" else "EFWdiff"
 treat_cut  <- if (TREAT_SCALE == "rank") RANK_THRESHOLD else THRESHOLD
+treat_text <- if (TREAT_SCALE == "rank") "a large EFW rank change" else
+  "a 1-point EFW change"
 
 panel <- panel %>%
   arrange(country, year) %>%
@@ -195,20 +250,12 @@ panel <- panel %>%
   ) %>%
   ungroup()
 
-# Median split for the two-by-two figure: EFW at the start of the window
-# (t-5) above or below that year's cross-country median.
-panel <- panel %>%
-  group_by(year) %>%
-  mutate(efw_half = if_else(lagEFW > median(lagEFW, na.rm = TRUE),
-                            "EFW score above median", "EFW score below median")) %>%
-  ungroup()
-
 episodes <- panel %>%
-  filter(EFWjump %in% 1 | EFWdrop %in% 1, !is.na(change_IM_post)) %>%
+  filter(EFWjump %in% 1 | EFWdrop %in% 1, !is.na(.data[[OUTCOME]])) %>%
   transmute(country, period = paste0(year - window, "-", year),
             type = if_else(EFWjump %in% 1, "Liberalization", "Deliberalization"),
             EFW_start = round(lagEFW, 2), EFW_change = round(EFWdiff, 2),
-            efw_half)
+            pctile_rank_change = round(EFWrdiff, 3))
 write.csv(episodes, file.path(tab_dir, "T1_episodes.csv"), row.names = FALSE)
 
 
@@ -246,26 +293,55 @@ ps_fit <- function(df, treatment, covars) {
   suppressWarnings(fitted(glm(f, data = df, family = binomial(link = "logit"))))
 }
 
-att_nn3 <- function(df, treatment, ps, y = OUTCOME) {
-  m <- tryCatch(Match(Y = df[[y]], Tr = df[[treatment]], X = ps, M = 3,
-                      estimand = "ATT", caliper = psm_caliper, replace = TRUE,
-                      CommonSupport = TRUE),
+# BA_VAR: the covariate the bias-adjusted PSM estimators regress on
+BA_VAR <- "lag_IM"
+
+att_nn3 <- function(df, treatment, ps, y = OUTCOME, ba = FALSE) {
+  m <- tryCatch(if (ba)
+                  Match(Y = df[[y]], Tr = df[[treatment]], X = ps, Z = df[[BA_VAR]],
+                        M = 3, estimand = "ATT", caliper = psm_caliper,
+                        replace = TRUE, CommonSupport = TRUE, BiasAdjust = TRUE)
+                else
+                  Match(Y = df[[y]], Tr = df[[treatment]], X = ps, M = 3,
+                        estimand = "ATT", caliper = psm_caliper, replace = TRUE,
+                        CommonSupport = TRUE),
                 error = function(e) NULL)
   if (!is.list(m) || length(m$est) == 0) return(list(att = NA_real_, m = NULL))
+  # With CommonSupport = TRUE, Match() drops rows outside the common support
+  # and its index.treated / index.control refer to the TRIMMED data. Keep the
+  # map back to rows of df (needed for balance tables).
+  tr <- df[[treatment]] == 1
+  lo <- max(min(ps[tr]), min(ps[!tr])); hi <- min(max(ps[tr]), max(ps[!tr]))
+  m$rows <- which(ps >= lo & ps <= hi)
   list(att = as.numeric(m$est), m = m)
 }
 
-att_kernel <- function(df, treatment, ps, y = OUTCOME) {
+att_kernel <- function(df, treatment, ps, y = OUTCOME, ba = FALSE) {
   tr <- df[[treatment]] == 1
-  yy <- df[[y]]
+  yy <- df[[y]]; zz <- df[[BA_VAR]]
   ps_t <- ps[tr]; ps_c <- ps[!tr]; y_t <- yy[tr]; y_c <- yy[!tr]
+  z_t <- zz[tr]; z_c <- zz[!tr]
   on_support <- ps_t >= min(ps_c) & ps_t <= max(ps_c)
-  cf <- vapply(ps_t, function(p) {
+  # Normalized kernel weights: row i = treated, column j = control
+  W <- t(vapply(ps_t, function(p) {
     u <- (ps_c - p) / kernel_bw
     w <- ifelse(abs(u) < 1, 0.75 * (1 - u^2), 0)
-    if (sum(w) == 0) NA_real_ else sum(w * y_c) / sum(w)
-  }, numeric(1))
-  keep <- on_support & !is.na(cf)
+    if (sum(w) == 0) rep(NA_real_, length(w)) else w / sum(w)
+  }, numeric(length(ps_c))))
+  ok_row <- on_support & !is.na(W[, 1])
+  beta <- 0
+  if (ba && any(ok_row)) {
+    # Regression of the outcome on IMR(t-5) among matched controls, weighted
+    # by the total kernel weight each control receives
+    wc <- colSums(W[ok_row, , drop = FALSE])
+    use <- wc > 0
+    if (sum(use) > 2)
+      beta <- unname(coef(lm(y_c[use] ~ z_c[use], weights = wc[use]))[2])
+  }
+  # Counterfactual: weighted control outcomes, shifted by beta times the
+  # treated-control gap in IMR(t-5) (beta = 0 without bias adjustment)
+  cf <- as.numeric(W %*% y_c) + beta * (z_t - as.numeric(W %*% z_c))
+  keep <- ok_row & !is.na(cf)
   list(att = if (any(keep)) mean(y_t[keep] - cf[keep]) else NA_real_,
        n_treated = sum(keep))
 }
@@ -282,8 +358,7 @@ att_mah <- function(df, treatment, covars, y = OUTCOME) {
 # One common sample per pair: complete on all outcomes and every covariate
 # of every spec, so S1-S3 differ only in the covariates.
 test_sample <- function(data, treatment, control_filter = NULL) {
-  need <- c(OUTCOME, "change_IM_post", "IM_post", "change_IM", all_covars)
-  if (APPENDIX_2024) need <- setdiff(need, c("IM_post"))
+  need <- c(OUTCOME, all_covars)
   ok <- complete.cases(as.data.frame(data)[, unique(need)])
   df <- as.data.frame(data[ok, ])
   df <- df[!is.na(df[[treatment]]), ]
@@ -299,15 +374,21 @@ estimate_specs <- function(df, treatment, y = OUTCOME) {
     ps <- ps_fit(df, treatment, cv)
     nn <- att_nn3(df, treatment, ps, y)
     list(nn3 = nn$att, nn3_match = nn$m,
+         nn3_ba = att_nn3(df, treatment, ps, y, ba = TRUE)$att,
          kernel = att_kernel(df, treatment, ps, y)$att,
+         kernel_ba = att_kernel(df, treatment, ps, y, ba = TRUE)$att,
          mah = att_mah(df, treatment, cv, y))
   })
 }
 
+psm_ests <- c("nn3", "nn3_ba", "kernel", "kernel_ba")
+psm_names <- c(nn3 = "PSM NN3", nn3_ba = "PSM NN3 (BA)", kernel = "PSM Kernel",
+               kernel_ba = "PSM Kernel (BA)")
+
 cluster_boot <- function(df, treatment, y = OUTCOME, B = B_BOOT) {
   countries <- unique(df$country)
   idx <- split(seq_len(nrow(df)), df$country)
-  cols <- paste(rep(names(specs), each = 2), c("nn3", "kernel"), sep = ".")
+  cols <- paste(rep(names(specs), each = 4), psm_ests, sep = ".")
   res <- matrix(NA_real_, B, length(cols), dimnames = list(NULL, cols))
   set.seed(SEED)
   for (b in seq_len(B)) {
@@ -317,14 +398,17 @@ cluster_boot <- function(df, treatment, y = OUTCOME, B = B_BOOT) {
     for (s in names(specs)) {
       ps <- tryCatch(ps_fit(db, treatment, specs[[s]]), error = function(e) NULL)
       if (is.null(ps)) next
-      res[b, paste0(s, ".nn3")]    <- att_nn3(db, treatment, ps, y)$att
-      res[b, paste0(s, ".kernel")] <- att_kernel(db, treatment, ps, y)$att
+      res[b, paste0(s, ".nn3")]       <- att_nn3(db, treatment, ps, y)$att
+      res[b, paste0(s, ".nn3_ba")]    <- att_nn3(db, treatment, ps, y, ba = TRUE)$att
+      res[b, paste0(s, ".kernel")]    <- att_kernel(db, treatment, ps, y)$att
+      res[b, paste0(s, ".kernel_ba")] <- att_kernel(db, treatment, ps, y, ba = TRUE)$att
     }
   }
   res
 }
 
 smd_matched <- function(x, m) {
+  if (!is.null(m$rows)) x <- x[m$rows]   # PSM NN3: indices are on trimmed data
   (weighted.mean(x[m$index.treated], m$weights) -
      weighted.mean(x[m$index.control], m$weights)) / sd(x[unique(m$index.treated)])
 }
@@ -368,13 +452,13 @@ write.csv(selection, file.path(tab_dir, "D3_selection_logit.csv"), row.names = F
 
 
 # =============================================================================
-# Part 6: Regression benchmark, IMR change ~ continuous EFW change
+# Part 6: Regression benchmark, IMR level ~ continuous EFW change
 # =============================================================================
-# The "naive IMR ~ delta EFW" step in its simplest form: OLS of the IMR
-# change after the window on the EFW change over the window, year fixed
-# effects, country-clustered SEs, then the same three-step sequence.
+# The "naive IMR ~ delta EFW" step in its simplest form: OLS of the outcome
+# (IMR level at t+5) on the EFW change over the window, year fixed effects,
+# country-clustered SEs, then the same three-step sequence.
 
-reg_df <- panel %>% filter(!is.na(change_IM_post)) %>%
+reg_df <- panel %>% filter(!is.na(.data[[OUTCOME]])) %>%
   filter(if_all(all_of(all_covars), ~ !is.na(.)), !is.na(EFWdiff)) %>%
   filter(!(country == "Venezuela" & year == 2000))
 rhs <- list(
@@ -383,7 +467,7 @@ rhs <- list(
   R2 = paste(c("EFWdiff", base_covars, lag_sc), collapse = " + "),
   R3 = paste(c("EFWdiff", base_covars, lag_sc, "lag_con_int"), collapse = " + "))
 regs <- lapply(rhs, function(r)
-  feols(as.formula(paste("change_IM_post ~", r, "| year")), data = reg_df,
+  feols(as.formula(paste(OUTCOME, "~", r, "| year")), data = reg_df,
         cluster = ~ country))
 reg_tab <- do.call(rbind, lapply(names(regs), function(k) {
   ct <- coeftable(regs[[k]])
@@ -432,10 +516,10 @@ run_all <- function(y) {
 att_rows <- function(r, s) {
   e <- r$est[[s]]
   data.frame(spec = s, label = spec_labels[[s]],
-             estimator = c("PSM NN3", "PSM Kernel", "Mahalanobis NN3 (BA)"),
-             att = c(e$nn3, e$kernel, e$mah$att),
-             se  = c(sd(r$boot[, paste0(s, ".nn3")], na.rm = TRUE),
-                     sd(r$boot[, paste0(s, ".kernel")], na.rm = TRUE),
+             estimator = c(psm_names[psm_ests], "Mahalanobis NN3 (BA)"),
+             att = c(sapply(psm_ests, function(k) e[[k]]), e$mah$att),
+             se  = c(sapply(psm_ests, function(k)
+                       sd(r$boot[, paste0(s, ".", k)], na.rm = TRUE)),
                      e$mah$se),
              n_treated = r$n_treated, n = nrow(r$df))
 }
@@ -456,7 +540,7 @@ contrast_table <- function(results) {
     if (is.null(r)) return(NULL)
     do.call(rbind, lapply(names(contrasts), function(k) {
       a <- contrasts[[k]][1]; b <- contrasts[[k]][2]
-      do.call(rbind, lapply(c("nn3", "kernel"), function(est) {
+      do.call(rbind, lapply(psm_ests, function(est) {
         d_hat <- r$est[[a]][[est]] - r$est[[b]][[est]]
         d_bt  <- r$boot[, paste0(a, ".", est)] - r$boot[, paste0(b, ".", est)]
         data.frame(pair = p, contrast = k, estimator = est, diff = d_hat,
@@ -495,7 +579,7 @@ write.csv(att_main, file.path(tab_dir, "T3_att.csv"), row.names = FALSE)
 write.csv(con_main, file.path(tab_dir, "T4_contrasts.csv"), row.names = FALSE)
 write.csv(bal_main, file.path(tab_dir, "T5_balance.csv"), row.names = FALSE)
 
-sum_vars <- c("change_IM_post", "change_IM", "EFWdiff", all_covars)
+sum_vars <- c(OUTCOME, "EFWdiff", all_covars)
 sumstats <- res_main$A$df[, sum_vars] %>%
   summarise(across(everything(),
                    list(Mean = ~mean(.), SD = ~sd(.), Min = ~min(.), Max = ~max(.)),
@@ -505,81 +589,73 @@ write.csv(sumstats, file.path(tab_dir, "T2_summary_statistics.csv"), row.names =
 
 
 # =============================================================================
-# Part 8: Two-by-two diagnostic, liberalizers/deliberalizers x EFW half
+# Part 8: Liberalizers (headline) vs deliberalizers (appendix)
 # =============================================================================
-# Rows: liberalizers (pair A) and deliberalizers (pair C). Columns: EFW at
-# t-5 above or below that year's median. Treated and comparison countries are
-# both drawn from the same half, and matching is redone within the half.
-# Each panel compares "No DQ control" (S2: naive + state capacity) with
-# "DQ control: con_int" (S3, headline) for each matching method.
+# Full-sample estimates from Part 7: liberalizers = pair A (headline),
+# deliberalizers = pair C (appendix). The above/below-median EFW split was
+# dropped on 19 Nov (Eric): the halves were too thin to estimate.
+# Two versions of the figure:
+#   F1  : "No DQ control" (S2: naive + state capacity) vs
+#         "DQ control: con_int" (S3, headline)
+#   F1b : "No state capacity control" (S1, naive) vs
+#         "State capacity control" (S2); neither controls for data quality
 
-halves <- c("EFW score above median", "EFW score below median")
-grid_res <- list()
-for (p in c("A", "C")) for (h in halves) {
-  pr <- pairs[[p]]
-  df <- test_sample(panel, pr$treatment, pr$control_filter)
-  df <- df[df$efw_half == h, ]
-  grid_res[[paste(p, h, sep = "|")]] <-
-    run_pair(df, pr$treatment, OUTCOME, paste("Pair", p, "-", h))
-}
+side_names <- c(A = "Liberalizers (headline)", C = "Deliberalizers (appendix)")
+est_levels <- c("Mahalanobis NN3 (BA)", "PSM Kernel (BA)", "PSM Kernel",
+                "PSM NN3 (BA)", "PSM NN3")
 
-grid_tab <- do.call(rbind, lapply(names(grid_res), function(k) {
-  r <- grid_res[[k]]
-  pp <- strsplit(k, "|", fixed = TRUE)[[1]]
-  if (is.null(r)) {
-    return(data.frame(pair = pp[1], half = pp[2], spec = NA, label = NA,
-                      estimator = NA, att = NA, se = NA,
-                      n_treated = sum(test_sample(panel, pairs[[pp[1]]]$treatment)$efw_half == pp[2] &
-                                        test_sample(panel, pairs[[pp[1]]]$treatment)[[pairs[[pp[1]]]$treatment]] == 1),
-                      n = NA))
-  }
-  cbind(pair = pp[1], half = pp[2],
-        do.call(rbind, lapply(c("S2", "S3"), function(s) att_rows(r, s))))
-}))
-write.csv(grid_tab, file.path(tab_dir, "T7_two_by_two_median_split.csv"),
+lib_delib_tab <- att_main %>% filter(pair %in% names(side_names))
+write.csv(lib_delib_tab, file.path(tab_dir, "T7_liberalizers_vs_deliberalizers.csv"),
           row.names = FALSE)
 
-dq_cols <- c("No DQ control" = "#2a6fdb", "DQ control: con_int" = "#e8613a")
-est_levels <- c("Mahalanobis NN3 (BA)", "PSM Kernel", "PSM NN3")
-
-g <- grid_tab %>%
-  filter(!is.na(spec)) %>%
-  mutate(dq = factor(if_else(spec == "S2", "No DQ control", "DQ control: con_int"),
-                     levels = names(dq_cols)),
-         row = factor(if_else(pair == "A", "Liberalizers", "Deliberalizers"),
-                      levels = c("Liberalizers", "Deliberalizers")),
-         half = factor(half, levels = halves),
-         estimator = factor(estimator, levels = est_levels),
-         lo = att - 1.96 * se, hi = att + 1.96 * se)
-n_lab <- grid_tab %>% group_by(pair, half) %>%
+n_lab <- lib_delib_tab %>% group_by(pair) %>%
   summarise(n_treated = first(n_treated), n = first(n), .groups = "drop") %>%
-  mutate(row = factor(if_else(pair == "A", "Liberalizers", "Deliberalizers"),
-                      levels = c("Liberalizers", "Deliberalizers")),
-         half = factor(half, levels = halves),
-         lab = paste0(n_treated, " treated", if_else(is.na(n), " (too few to match)",
-                                                     paste0(", ", n, " obs"))))
+  mutate(side = factor(side_names[pair], levels = side_names),
+         lab = paste0(n_treated, " treated, ", n, " obs"))
 
-f_grid <- ggplot(g, aes(x = att, y = estimator, colour = dq)) +
-  geom_vline(xintercept = 0, colour = "grey30") +
-  geom_errorbar(aes(xmin = lo, xmax = hi), width = 0, orientation = "y", linewidth = 0.7,
-                 position = position_dodge(width = 0.55)) +
-  geom_point(size = 2.6, position = position_dodge(width = 0.55)) +
-  geom_text(data = n_lab, aes(x = Inf, y = Inf, label = lab), inherit.aes = FALSE,
-            hjust = 1.05, vjust = 1.4, size = 3, colour = "grey35") +
-  facet_grid(row ~ half, scales = "free_x") +
-  scale_colour_manual(values = dq_cols, drop = FALSE) +
-  labs(title = "Effect of a 1-point EFW change on the IMR change over the next 5 years",
-       subtitle = paste0("ATT in deaths per 1,000 live births with 95% CI, ",
-                         if (APPENDIX_2024) "1970-2024 (appendix)" else "1970-2020",
-                         ". Negative = IMR fell faster than in matched controls.\n",
-                         "Both specifications control for state capacity (c_comp, pca_comp). ",
-                         "EFW halves split at each year's median EFW at t-5."),
-       x = "ATT (change in IMR, per 1,000)", y = NULL, colour = NULL) +
-  theme_minimal(base_size = 11) +
-  theme(legend.position = "bottom", strip.text = element_text(face = "bold"),
-        plot.title = element_text(face = "bold"), panel.spacing = unit(1.2, "lines"))
-ggsave(file.path(fig_dir, "F1_two_by_two_dq_median_split.png"), f_grid,
-       width = 10, height = 7, dpi = 200)
+# spec_map: named vector, spec code -> legend label (first = without the
+# control, second = with it)
+ba_note <- paste0("BA = bias-adjusted. PSM (BA): regression on IMR at t-5 within the matched sample.\n",
+                  "Mahalanobis (BA): regression on all matching covariates.")
+
+plot_sides <- function(spec_map, cols, note, file) {
+  g <- lib_delib_tab %>%
+    filter(spec %in% names(spec_map)) %>%
+    mutate(ctrl = factor(spec_map[spec], levels = spec_map),
+           side = factor(side_names[pair], levels = side_names),
+           estimator = factor(estimator, levels = est_levels),
+           lo = att - 1.96 * se, hi = att + 1.96 * se)
+  f <- ggplot(g, aes(x = att, y = estimator, colour = ctrl)) +
+    geom_vline(xintercept = 0, colour = "grey30") +
+    geom_errorbar(aes(xmin = lo, xmax = hi), width = 0, orientation = "y",
+                  linewidth = 0.7, position = position_dodge(width = 0.55)) +
+    geom_point(size = 2.6, position = position_dodge(width = 0.55)) +
+    geom_text(data = n_lab, aes(x = Inf, y = Inf, label = lab), inherit.aes = FALSE,
+              hjust = 1.05, vjust = 1.4, size = 3, colour = "grey35") +
+    facet_wrap(~ side, nrow = 1, scales = "free_x") +
+    scale_colour_manual(values = setNames(cols, spec_map), drop = FALSE) +
+    labs(title = paste("Effect of", treat_text, "on the", out_lab$what),
+         subtitle = paste0("ATT in deaths per 1,000 live births with 95% CI, ",
+                           if (APPENDIX_2024) "1970-2024 (appendix)" else "1970-2020",
+                           ". ", out_lab$sign, "\n", note, "\n", ba_note),
+         x = out_lab$axis, y = NULL, colour = NULL) +
+    theme_minimal(base_size = 11) +
+    theme(legend.position = "bottom", strip.text = element_text(face = "bold"),
+          plot.title = element_text(face = "bold"), panel.spacing = unit(1.5, "lines"))
+  ggsave(file.path(fig_dir, file), f, width = 10, height = 6.4, dpi = 200)
+  invisible(f)
+}
+
+sc_name <- paste(SC_VARS, collapse = ", ")
+plot_sides(c(S2 = "No DQ control", S3 = "DQ control: con_int"),
+           c("#2a6fdb", "#e8613a"),
+           paste0("Both specifications control for state capacity (", sc_name, ")."),
+           "F1_lib_vs_delib_dq.png")
+plot_sides(c(S1 = "No state capacity control",
+             S2 = paste0("State capacity control: ", sc_name)),
+           c("#8a8a8a", "#2a6fdb"),
+           "Neither specification controls for data quality (con_int).",
+           "F1b_lib_vs_delib_sc.png")
 
 
 # =============================================================================
@@ -602,11 +678,11 @@ f2 <- att_main %>%
   facet_wrap(~ pair, ncol = 1, scales = "free_x") +
   scale_colour_manual(values = spec_cols) +
   labs(title = "ATT by specification step",
-       subtitle = "IMR change t to t+5, deaths per 1,000, 95% CI",
-       x = "ATT (change in IMR, per 1,000)", y = NULL, colour = NULL) +
+       subtitle = paste0(out_lab$what, ", deaths per 1,000, 95% CI"),
+       x = out_lab$axis, y = NULL, colour = NULL) +
   theme_minimal(base_size = 11) +
   theme(legend.position = "bottom", strip.text = element_text(face = "bold", hjust = 0))
-ggsave(file.path(fig_dir, "F2_att_by_spec_step.png"), f2, width = 9, height = 9, dpi = 200)
+ggsave(file.path(fig_dir, "F2_att_by_spec_step.png"), f2, width = 9, height = 12, dpi = 200)
 
 f3 <- con_main %>% filter(contrast == "dq_given_sc") %>%
   mutate(pair = factor(pair_names[pair], levels = rev(pair_names))) %>%
@@ -624,16 +700,16 @@ ggsave(file.path(fig_dir, "F3_headline_contrast.png"), f3, width = 9, height = 4
 # Part 10: Robustness hooks (plan section 8; change a setting and rerun)
 # =============================================================================
 # Appendix 2024 : Sys.setenv(APPENDIX_2024 = "TRUE") and rerun
-# EFW rank      : TREAT_SCALE <- "rank" (threshold RANK_THRESHOLD, to decide)
-# A1 / A2       : OUTCOME <- "IM_post" / "change_IM"
+# Outcomes      : Sys.setenv(OUTCOME = "IM_t" / "change_IM_post" / "change_IM")
 # Threshold     : THRESHOLD <- 0.75 or 0.5
 
-saveRDS(list(panel = panel, main = res_main, grid = grid_res,
+saveRDS(list(panel = panel, main = res_main,
              att = att_main, contrasts = con_main, balance = bal_main,
-             grid_tab = grid_tab, regressions = reg_tab,
+             lib_delib = lib_delib_tab, regressions = reg_tab,
              settings = list(DATA_FILE = DATA_FILE, OUTCOME = OUTCOME,
                              APPENDIX_2024 = APPENDIX_2024, THRESHOLD = THRESHOLD,
                              TREAT_SCALE = TREAT_SCALE, SC_VARS = SC_VARS,
+                             GDP_SOURCE = GDP_SOURCE,
                              B_BOOT = B_BOOT)),
         file.path(out_dir, "results.rds"))
 cat("Done. Outputs in", out_dir, "\n")
