@@ -436,9 +436,25 @@ Eric is still validating; see the data flags in the thread and Section 6b.
 | 5 | Claude | Tables and visualizations (Section 7), iterated | After step 4 |
 | 6 | Eric | Update the paper draft | After step 5 |
 
+### Next steps (Eric, 19 Nov, for 20 Nov)
+
+| Item | What | Status (19 Nov evening) |
+|---|---|---|
+| 1 | Review and validate the updated panel once Nishant adds unrounded `rgdpe`, `pop` and `hc` and the missing prior-period GDP for 5-year growth (147 country-years listed in `version16_missing_prior_gdp.csv`) | Waiting on Nishant. `version16.csv` as of 19 Nov still has whole-number `hc` and `pop` and no 1970 growth. |
+| 2 | Specifications on the IMR level, with bias-adjusted PSM | Done on `version16` (script default); rerun on the updated panel |
+| 2b | Bias adjustment in mathematical form, with an explanation, in its own markdown file | Draft: `Code/3) PSM Bias Adjustment.md` |
+| 3 | Liberalizers as the headline, deliberalizers in the appendix; possibly a combined-magnitude analysis of liberalizers and deliberalizers in the appendix | First part done (figures F1, F1b). Combined magnitude: open, to define with Eric |
+| 4 | Prepare the agreed diagnostics (Section 7) | Tables T1-T7 and D1-D3 run; love plot and `con_int` vs IMR figure still to add |
+
+Eric reviews the R code separately on his own.
+
 ## 11. Open questions
 
 1. Headline end year: settled 19 Nov, 1970-2020 headline and 2024 in the
    appendix.
 2. EFW rank analysis threshold: still to be set. The 20% rank and 20% score
    runs were dropped on 19 Nov.
+3. "Magnitude combining liberalizers with deliberalizers" (Eric, 19 Nov, with
+   a question mark): for example, one treatment for any EFW move of 1 point
+   or more in either direction, or the signed EFW change as a continuous
+   treatment. To define before building.
