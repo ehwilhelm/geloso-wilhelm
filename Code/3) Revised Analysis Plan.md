@@ -11,9 +11,12 @@ it compiles through LaTeX.*
   1970-75 to 2010-15, with IMR outcomes through 2020. The **extension of the
   panel to 2024 goes in the appendix**: it adds the 2015-20 EFW window with a
   2020-24 IMR outcome (4 years, scaled to 5). Script setting `APPENDIX_2024`.
-- **Data:** `version16.csv` (19 Nov). `totalpop` and `totalGDP` are empty for
-  2020 and 2024, so GDP per capita is built from PWT `rgdpe / pop`. PWT 2024
-  is not released, so the 2024 rows carry 2023 PWT values.
+- **Data:** `version16.csv` (19 Nov). GDP per capita is the panel's `gdppc`
+  column, which comes from Our World in Data (Eric, 19 Nov pm; switch
+  `GDP_SOURCE = "rgdpe_pop"` to rebuild it from PWT). PWT 2024 is not
+  released, so the 2024 rows carry 2023 PWT values. Nishant is pulling
+  unrounded `rgdpe`, `pop` and `hc`, and 1965 GDP per capita so that 5-year
+  GDP growth exists for 1970 (more deliberalizers, see Section 6b).
 - **Main independent variable:** the 5-year change in the EFW summary index
   (`ECONOMIC FREEDOM ALL AREAS`). The change in EFW **rank** is a separate
   analysis (script setting `TREAT_SCALE = "rank"`).
@@ -21,7 +24,8 @@ it compiles through LaTeX.*
   EFW change of **-1 or less** (Eric, 19 Nov).
 - **Specification sequence (replaces S0-S5):**
   1. Naive: IMR change ~ EFW treatment, matching on the baseline covariates.
-  2. Add state capacity: O'Reilly-Murphy `c_comp` and `pca_comp`.
+  2. Add state capacity: O'Reilly-Murphy `c_comp` only (Eric, 19 Nov pm:
+     `c_comp` and `pca_comp` are never in the same specification).
   3. **Headline:** add `con_int` = `IM_upper_bound` - `IM_lower_bound`.
 - **Relative precision (`rp`) is dropped** from the analysis, and so is the
   residualized data-quality measure (old S5). `con_int` is the only
@@ -71,11 +75,11 @@ over the same window as the EFW change (`change_IM`, `2) Analysis.R` line
 |---|---|---|
 | Outcome | Change in IMR from $t$ to $t+5$, after the EFW window $t-5$ to $t$ (Callais & Young timing). IMR level at $t+5$ (A1) and the same-window change (A2) as robustness. | Eric, 18 Nov |
 | Treatment | A 5-year EFW change of +1 or more (liberalization) or -1 or less (deliberalization), with Callais & Young adjacency blanking | Vincent Notes, Oct design |
-| State capacity | O'Reilly-Murphy Index of State Capacity, time-varying: `c_comp` and `pca_comp` | Eric, 17 and 19 Nov |
+| State capacity | O'Reilly-Murphy Index of State Capacity, time-varying: `c_comp` only (`pca_comp` is an alternative, never in the same spec) | Eric, 17 and 19 Nov |
 | Sample period | Headline 1970-2020; extension to 2024 in the appendix | Eric, 19 Nov |
 | Main regressor | Change in the EFW summary index; change in EFW rank as a separate analysis | Eric, 19 Nov |
-| Specification sequence | Naive, then + state capacity, then + `con_int` (headline); `rp` dropped | Eric, 19 Nov |
-| GDP per capita | `rgdpe / pop` (PWT); 2023 PWT values stand in for 2024 | Eric, 19 Nov |
+| Specification sequence | Naive, then + state capacity (`c_comp`), then + `con_int` (headline); `rp` dropped | Eric, 19 Nov |
+| GDP per capita | `gdppc` from Our World in Data, with 5-year growth (1965 values to be added); 2023 PWT values stand in for 2024 | Eric, 19 Nov |
 | Regime type | Polity5 as a matching covariate (2018 values stand in for 2020) | Eric, 16-17 Nov |
 | Data quality | IGME 90% interval width, `con_int` = `IM_upper_bound` - `IM_lower_bound`, lagged. A control, never an outcome. `rp` dropped. | Vincent Notes; Eric, 18-19 Nov |
 | Method | PSM (NN3, kernel) and Mahalanobis NN3 | Eric, 18 Nov |
@@ -99,10 +103,9 @@ over the same window as the EFW change (`change_IM`, `2) Analysis.R` line
 - **Baseline covariates, all at $t-5$:** EFW, human capital, ln GDP per capita
   and its square, 5-year GDP growth, fertility rate (see Section 5), old-age
   dependency, Polity5, urbanization and IMR.
-- **State capacity:** O'Reilly-Murphy `c_comp` and `pca_comp` at $t-5$
-  (Eric, 19 Nov). In `version16` the two correlate at 0.99999 (VIF about
-  66,000 in the headline propensity model), so together they act as one
-  variable; dropping `pca_comp` is a one-line change (`SC_VARS`).
+- **State capacity:** O'Reilly-Murphy `c_comp` at $t-5$ (Eric, 19 Nov).
+  `pca_comp` correlates with it at 0.99999, so it is only an alternative
+  (`SC_VARS`), never added alongside it.
 - **Data quality:** `con_int` = upper minus lower bound of the IGME 90%
   interval at $t-5$.
 - **Estimators:** PSM NN3 (logit score, caliper 0.25 SD, with replacement),
@@ -128,8 +131,8 @@ over the same window as the EFW change (`change_IM`, `2) Analysis.R` line
 | Step | Matching covariates | Role |
 |---|---|---|
 | S1 | Baseline | 1) Naive: IMR change ~ EFW treatment |
-| S2 | Baseline + `c_comp` + `pca_comp` | 2) + state capacity; "No DQ control" |
-| **S3** | **Baseline + `c_comp` + `pca_comp` + `con_int`** | **3) Headline; "DQ control: con_int"** |
+| S2 | Baseline + `c_comp` | 2) + state capacity; "No DQ control" |
+| **S3** | **Baseline + `c_comp` + `con_int`** | **3) Headline; "DQ control: con_int"** |
 
 **Reported contrasts** (bootstrap SE from the same draws):
 
@@ -243,11 +246,15 @@ the 2015-20 window (outcome 2020-24) needs IMR for 2024 (present) and the
 
 - `hc` holds whole numbers only (1, 2, 3, 4) and `pop` is rounded to whole
   millions, from `version10` on. In `version9` they had decimals (Chile 1990:
-  hc 2.64, pop 13.27). 65 rows have `pop` = 0, so GDP per capita is missing
-  for them (e.g. Bahamas), and it is distorted for other small countries.
-- `gdppc_5growth` is empty for 1970 (it needs 1965 GDP), so every 1970-75
-  window drops out of the matching. This removes most of the 1970s
-  deliberalizations (12 of 30 survive, against 22 in October).
+  hc 2.64, pop 13.27). 65 rows have `pop` = 0. Eric is asking Nishant for
+  unrounded `rgdpe`, `pop` and `hc` (19 Nov).
+- The `gdppc` column equals `rgdpe / pop` exactly in every `version16` row,
+  so it does not yet hold the Our World in Data series.
+- `gdppc_5growth` is empty for 1970 (it needs 1965 GDP per capita), so every
+  1970-75 window drops out of the matching. With 1970 growth filled, the
+  headline sample would go from 12 to 25 deliberalizations and from 40 to 44
+  liberalizations (count on `version16`, 19 Nov). The script reads 1965 rows
+  automatically once the panel has them.
 - `c_comp` and `pca_comp` correlate at 0.99999.
 
 ## 7. Diagnostics and visualizations (to be tuned after Eric's review)

@@ -22,15 +22,20 @@
 #   Estimators     : PSM NN3, PSM kernel (Epanechnikov), Mahalanobis NN3 (BA).
 #   Specification sequence:
 #     S1 Naive     : IMR change ~ EFW treatment, baseline covariates
-#     S2 + SC      : + O'Reilly-Murphy state capacity c_comp and pca_comp
+#     S2 + SC      : + O'Reilly-Murphy state capacity c_comp (only; Eric,
+#                    19 Nov: c_comp and pca_comp never in the same spec)
 #     S3 Headline  : + con_int = IM_upper_bound - IM_lower_bound (data quality)
 #     Relative precision (rp) is dropped from the analysis.
 #   Sample         : headline 1970-2020 (last EFW window 2010-15, outcome
 #                    2015-20). Appendix: extension to 2024 (APPENDIX_2024).
 #
 # Data notes for version16.csv:
-#   - totalpop and totalGDP are empty for 2020 and 2024, so GDP per capita is
-#     rebuilt here as rgdpe / pop (Eric, 19 Nov).
+#   - GDP per capita is the panel's `gdppc` column (Our World in Data, per
+#     Eric 19 Nov); GDP_SOURCE = "rgdpe_pop" rebuilds it from PWT instead.
+#     In version16 `gdppc` still equals rgdpe / pop exactly in every row.
+#   - 5-yr GDP pc growth at 1970 needs 1965 GDP pc. If the panel has 1965
+#     rows, they are read and used for that growth (and nothing else is
+#     estimated on them), which brings the 1970-75 EFW windows back.
 #   - PWT has no 2024 release yet: the 2024 rows carry 2023 PWT values.
 #   - Polity5 ends in 2018; the 2018 value stands in for 2020 and later.
 #   - The panel's lag* columns are not used; all lags are rebuilt here.
@@ -79,7 +84,9 @@ THRESHOLD   <- 1                # EFW points: >= +1 liberalizer, <= -1 deliberal
 RANK_THRESHOLD <- 0.20          # TODO(Eric): rank analysis only. Change in the
                                 # percentile rank (0-1) that counts as a jump.
 
-SC_VARS <- c("c_comp", "pca_comp")  # O'Reilly-Murphy ISC (V-Dem based)
+SC_VARS <- "c_comp"     # O'Reilly-Murphy ISC. Alternative: "pca_comp" (r = 0.99999);
+                        # never both in one specification (Eric, 19 Nov)
+GDP_SOURCE <- "gdppc"   # "gdppc" (panel column, OWID) | "rgdpe_pop" (PWT)
 FERT_OPTION <- "F1"                 # F1 keep lagged fertility (decided 18 Nov)
 
 B_BOOT      <- as.integer(Sys.getenv("B_BOOT", "200"))
@@ -89,6 +96,7 @@ kernel_bw   <- 0.06
 
 END_YEAR   <- if (APPENDIX_2024) 2024 else 2020
 grid_years <- c(seq(1970, 2020, 5), if (APPENDIX_2024) 2024)
+# grid_years gets 1965 added below if the panel has 1965 rows (growth only)
 
 run_tag <- paste0(if (APPENDIX_2024) "appendix_1970-2024" else "headline_1970-2020",
                   if (TREAT_SCALE == "rank") "_rank" else "")
@@ -100,16 +108,20 @@ dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
 
 
 # =============================================================================
-# Part 1: Load, build GDP per capita from rgdpe/pop, complete grid, lags
+# Part 1: Load, GDP per capita, complete grid, lags
 # =============================================================================
 
 raw <- read.csv(DATA_FILE, check.names = FALSE, stringsAsFactors = FALSE,
                 fileEncoding = "latin1")
 cat(sprintf("Loaded %s: %d rows x %d cols\n", basename(DATA_FILE),
             nrow(raw), ncol(raw)))
+if (any(raw$year == 1965)) {
+  grid_years <- c(1965, grid_years)
+  cat("1965 rows found: used for the 1965-70 GDP pc growth covariate.\n")
+}
 
 level_vars <- c("infantmortality", "IM_lower_bound", "IM_upper_bound",
-                "EFW", "EFW_rank", "rgdpe", "pop", "hc", "fertilrate",
+                "EFW", "EFW_rank", "gdppc", "rgdpe", "pop", "hc", "fertilrate",
                 "oldagedep", "polity5", "urbanpop", SC_VARS)
 
 panel <- raw %>%
@@ -128,8 +140,9 @@ panel <- raw %>%
   ) %>%
   group_by(country) %>%
   mutate(
-    # GDP per capita from PWT rgdpe and pop (totalGDP/totalpop end in 2015)
-    gdppc   = if_else(pop > 0, rgdpe / pop, NA_real_),
+    # GDP per capita: panel column (OWID) or PWT rgdpe / pop
+    gdppc   = if (GDP_SOURCE == "rgdpe_pop") if_else(pop > 0, rgdpe / pop, NA_real_)
+              else gdppc,
     lngdppc = log(gdppc),
     lngdppc2 = lngdppc^2,
     window      = year - lag(year),       # 5 (4 for 2020-2024)
@@ -572,7 +585,7 @@ f_grid <- ggplot(g, aes(x = att, y = estimator, colour = dq)) +
        subtitle = paste0("ATT in deaths per 1,000 live births with 95% CI, ",
                          if (APPENDIX_2024) "1970-2024 (appendix)" else "1970-2020",
                          ". Negative = IMR fell faster than in matched controls.\n",
-                         "Both specifications control for state capacity (c_comp, pca_comp). ",
+                         "Both specifications control for state capacity (", paste(SC_VARS, collapse = ", "), "). ",
                          "EFW halves split at each year's median EFW at t-5."),
        x = "ATT (change in IMR, per 1,000)", y = NULL, colour = NULL) +
   theme_minimal(base_size = 11) +
@@ -634,6 +647,7 @@ saveRDS(list(panel = panel, main = res_main, grid = grid_res,
              settings = list(DATA_FILE = DATA_FILE, OUTCOME = OUTCOME,
                              APPENDIX_2024 = APPENDIX_2024, THRESHOLD = THRESHOLD,
                              TREAT_SCALE = TREAT_SCALE, SC_VARS = SC_VARS,
+                             GDP_SOURCE = GDP_SOURCE,
                              B_BOOT = B_BOOT)),
         file.path(out_dir, "results.rds"))
 cat("Done. Outputs in", out_dir, "\n")
