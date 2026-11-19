@@ -1,5 +1,6 @@
 # =============================================================================
 # 3) Revised Analysis (draft).R      DRAFT, 19 Nov 2026 - reads version16.csv
+#                                    Outcome switched to IMR LEVELS (19 Nov pm)
 #
 # Companion to "3) Revised Analysis Plan.md" (read that first).
 #
@@ -9,19 +10,24 @@
 # Design (Eric, 18-19 Nov 2026):
 #   Main regressor : 5-year change in the EFW summary index
 #                    ("ECONOMIC FREEDOM ALL AREAS"). Change in EFW rank is a
-#                    separate analysis (Part 10, switch TREAT_SCALE).
+#                    separate analysis (switch TREAT_SCALE; threshold to
+#                    be decided).
 #   Treatment      : liberalizer   = EFW change over t-5..t >= +1
 #                    deliberalizer = EFW change over t-5..t <= -1
 #                    Callais & Young adjacency blanking; Venezuela 2000 out.
-#   Outcome        : Callais & Young timing, IMR(t+5) - IMR(t), deaths per
-#                    1,000 live births ("infantmortality", UN IGME).
-#                    Robustness: A1 IMR level at t+5; A2 IMR(t) - IMR(t-5).
+#   Outcome        : IMR LEVEL (Eric, 19 Nov pm, replaces the IMR change):
+#                    infant deaths per 1,000 live births ("infantmortality",
+#                    UN IGME) at t+5, five years after the EFW window t-5..t
+#                    (Callais & Young timing kept). OUTCOME = "IM_post".
+#                    Alternative: "IM_t", the level at the end of the window.
+#                    The earlier change outcomes stay available as settings:
+#                    "change_IM_post" (t..t+5) and "change_IM" (t-5..t).
 #   Covariates     : at t-5, same set as before (EFW, hc, ln GDP pc and its
 #                    square, 5-yr GDP pc growth, fertility, old-age
 #                    dependency, Polity5, urbanization, IMR).
 #   Estimators     : PSM NN3, PSM kernel (Epanechnikov), Mahalanobis NN3 (BA).
 #   Specification sequence:
-#     S1 Naive     : IMR change ~ EFW treatment, baseline covariates
+#     S1 Naive     : IMR level ~ EFW treatment, baseline covariates
 #     S2 + SC      : + O'Reilly-Murphy state capacity c_comp (only; Eric,
 #                    19 Nov: c_comp and pca_comp never in the same spec)
 #     S3 Headline  : + con_int = IM_upper_bound - IM_lower_bound (data quality)
@@ -78,17 +84,22 @@ DATA_FILE <- Sys.getenv("REVISED_CSV",
 # Set from the command line with Sys.setenv(APPENDIX_2024 = "TRUE").
 APPENDIX_2024 <- as.logical(Sys.getenv("APPENDIX_2024", "FALSE"))
 
-OUTCOME     <- "change_IM_post" # headline (C&Y). A1: "IM_post". A2: "change_IM"
-# TREAT_SCALE (set with Sys.setenv(TREAT_SCALE = "...")):
-#   "score"     main: change in EFW score of >= +1 / <= -1 points
-#   "score_pct" change in EFW score of >= +20% / <= -20% of its t-5 level
-#   "rank"      separate analysis: change in EFW percentile rank of >= 20
-#               percentile points up / down (rank 1 = freest; the number of
-#               ranked countries grows from 82 to 153, hence percentiles)
+# OUTCOME (set with Sys.setenv(OUTCOME = "...")):
+#   "IM_post"        headline: IMR level at t+5 (for the appendix's 2015-20
+#                    window this is the 2024 level, 4 years after)
+#   "IM_t"           IMR level at t, the end of the EFW window
+#   "change_IM_post" earlier outcome: IMR(t+5) - IMR(t)
+#   "change_IM"      earlier outcome: IMR(t) - IMR(t-5)
+OUTCOME <- Sys.getenv("OUTCOME", "IM_post")
+# TREAT_SCALE: "score" (main, EFW score change of >= +1 / <= -1 points) or
+#   "rank" (separate analysis on the EFW percentile rank; rank 1 = freest).
+#   The 20% rank and 20% score runs were dropped on 19 Nov; the rank
+#   threshold is still to be decided.
 TREAT_SCALE <- Sys.getenv("TREAT_SCALE", "score")
 THRESHOLD      <- 1      # "score": EFW points
-PCT_THRESHOLD  <- 0.20   # "score_pct": share of the t-5 EFW score (Eric, 19 Nov)
-RANK_THRESHOLD <- 0.20   # "rank": percentile points of the ranking (Eric, 19 Nov)
+RANK_THRESHOLD <- NA     # "rank": percentile points of the ranking, TO DECIDE
+if (TREAT_SCALE == "rank" && is.na(RANK_THRESHOLD))
+  stop("Set RANK_THRESHOLD before running the rank analysis.")
 
 SC_VARS <- "c_comp"     # O'Reilly-Murphy ISC. Alternative: "pca_comp" (r = 0.99999);
                         # never both in one specification (Eric, 19 Nov)
@@ -105,8 +116,23 @@ grid_years <- c(seq(1970, 2020, 5), if (APPENDIX_2024) 2024)
 # grid_years gets 1965 added below if the panel has 1965 rows (growth only)
 
 run_tag <- paste0(if (APPENDIX_2024) "appendix_1970-2024" else "headline_1970-2020",
-                  switch(TREAT_SCALE, score = "", score_pct = "_score20pct",
-                         rank = "_rank20pct"))
+                  if (OUTCOME == "IM_post") "" else paste0("_", OUTCOME),
+                  if (TREAT_SCALE == "rank") "_rank" else "")
+
+# Labels that follow the outcome
+out_lab <- switch(OUTCOME,
+  IM_post        = list(what = "IMR level 5 years after the EFW window",
+                        axis = "ATT (IMR level at t+5, per 1,000)",
+                        sign = "Negative = IMR lower than in matched controls."),
+  IM_t           = list(what = "IMR level at the end of the EFW window",
+                        axis = "ATT (IMR level at t, per 1,000)",
+                        sign = "Negative = IMR lower than in matched controls."),
+  change_IM_post = list(what = "IMR change over the next 5 years",
+                        axis = "ATT (change in IMR t to t+5, per 1,000)",
+                        sign = "Negative = IMR fell faster than in matched controls."),
+  change_IM      = list(what = "IMR change over the EFW window",
+                        axis = "ATT (change in IMR t-5 to t, per 1,000)",
+                        sign = "Negative = IMR fell faster than in matched controls."))
 out_dir <- file.path(root, "Results", "version16", run_tag)
 tab_dir <- file.path(out_dir, "tables")
 fig_dir <- file.path(out_dir, "figures")
@@ -159,12 +185,12 @@ panel <- raw %>%
     con_int = IM_upper_bound - IM_lower_bound,
     # Outcomes (C&Y timing: treatment over t-5..t, outcome over t..t+5)
     change_IM_post = (lead(infantmortality) - infantmortality) * 5 / window_next,
-    IM_post        = lead(infantmortality),                              # A1
+    IM_post        = lead(infantmortality),          # headline: level at t+5
+    IM_t           = infantmortality,                # level at t
     change_IM      = (infantmortality - lag(infantmortality)) * 5 / window, # A2
     # Treatment inputs
     EFWdiff   = EFW - lag(EFW),
     EFWrdiff  = -(EFW_prank - lag(EFW_prank)),   # > 0 = moved up the ranking
-    EFWpdiff  = EFWdiff / lag(EFW),               # relative change in score
     # Covariates at t-5
     lagEFW          = lag(EFW),
     laghc           = lag(hc),
@@ -200,14 +226,10 @@ cy_blank <- function(x) {
   x
 }
 
-treat_diff <- switch(TREAT_SCALE, score = "EFWdiff", score_pct = "EFWpdiff",
-                     rank = "EFWrdiff")
-treat_cut  <- switch(TREAT_SCALE, score = THRESHOLD, score_pct = PCT_THRESHOLD,
-                     rank = RANK_THRESHOLD)
-treat_text <- switch(TREAT_SCALE,
-  score     = "a 1-point EFW change",
-  score_pct = "a 20% EFW score change",
-  rank      = "a 20-percentile-point EFW rank change")
+treat_diff <- if (TREAT_SCALE == "rank") "EFWrdiff" else "EFWdiff"
+treat_cut  <- if (TREAT_SCALE == "rank") RANK_THRESHOLD else THRESHOLD
+treat_text <- if (TREAT_SCALE == "rank") "a large EFW rank change" else
+  "a 1-point EFW change"
 
 panel <- panel %>%
   arrange(country, year) %>%
@@ -231,11 +253,10 @@ panel <- panel %>%
   ungroup()
 
 episodes <- panel %>%
-  filter(EFWjump %in% 1 | EFWdrop %in% 1, !is.na(change_IM_post)) %>%
+  filter(EFWjump %in% 1 | EFWdrop %in% 1, !is.na(.data[[OUTCOME]])) %>%
   transmute(country, period = paste0(year - window, "-", year),
             type = if_else(EFWjump %in% 1, "Liberalization", "Deliberalization"),
             EFW_start = round(lagEFW, 2), EFW_change = round(EFWdiff, 2),
-            EFW_pct_change = round(EFWpdiff, 3),
             pctile_rank_change = round(EFWrdiff, 3),
             efw_half)
 write.csv(episodes, file.path(tab_dir, "T1_episodes.csv"), row.names = FALSE)
@@ -311,8 +332,7 @@ att_mah <- function(df, treatment, covars, y = OUTCOME) {
 # One common sample per pair: complete on all outcomes and every covariate
 # of every spec, so S1-S3 differ only in the covariates.
 test_sample <- function(data, treatment, control_filter = NULL) {
-  need <- c(OUTCOME, "change_IM_post", "IM_post", "change_IM", all_covars)
-  if (APPENDIX_2024) need <- setdiff(need, c("IM_post"))
+  need <- c(OUTCOME, all_covars)
   ok <- complete.cases(as.data.frame(data)[, unique(need)])
   df <- as.data.frame(data[ok, ])
   df <- df[!is.na(df[[treatment]]), ]
@@ -397,13 +417,13 @@ write.csv(selection, file.path(tab_dir, "D3_selection_logit.csv"), row.names = F
 
 
 # =============================================================================
-# Part 6: Regression benchmark, IMR change ~ continuous EFW change
+# Part 6: Regression benchmark, IMR level ~ continuous EFW change
 # =============================================================================
-# The "naive IMR ~ delta EFW" step in its simplest form: OLS of the IMR
-# change after the window on the EFW change over the window, year fixed
-# effects, country-clustered SEs, then the same three-step sequence.
+# The "naive IMR ~ delta EFW" step in its simplest form: OLS of the outcome
+# (IMR level at t+5) on the EFW change over the window, year fixed effects,
+# country-clustered SEs, then the same three-step sequence.
 
-reg_df <- panel %>% filter(!is.na(change_IM_post)) %>%
+reg_df <- panel %>% filter(!is.na(.data[[OUTCOME]])) %>%
   filter(if_all(all_of(all_covars), ~ !is.na(.)), !is.na(EFWdiff)) %>%
   filter(!(country == "Venezuela" & year == 2000))
 rhs <- list(
@@ -412,7 +432,7 @@ rhs <- list(
   R2 = paste(c("EFWdiff", base_covars, lag_sc), collapse = " + "),
   R3 = paste(c("EFWdiff", base_covars, lag_sc, "lag_con_int"), collapse = " + "))
 regs <- lapply(rhs, function(r)
-  feols(as.formula(paste("change_IM_post ~", r, "| year")), data = reg_df,
+  feols(as.formula(paste(OUTCOME, "~", r, "| year")), data = reg_df,
         cluster = ~ country))
 reg_tab <- do.call(rbind, lapply(names(regs), function(k) {
   ct <- coeftable(regs[[k]])
@@ -524,7 +544,7 @@ write.csv(att_main, file.path(tab_dir, "T3_att.csv"), row.names = FALSE)
 write.csv(con_main, file.path(tab_dir, "T4_contrasts.csv"), row.names = FALSE)
 write.csv(bal_main, file.path(tab_dir, "T5_balance.csv"), row.names = FALSE)
 
-sum_vars <- c("change_IM_post", "change_IM", "EFWdiff", all_covars)
+sum_vars <- c(OUTCOME, "EFWdiff", all_covars)
 sumstats <- res_main$A$df[, sum_vars] %>%
   summarise(across(everything(),
                    list(Mean = ~mean(.), SD = ~sd(.), Min = ~min(.), Max = ~max(.)),
@@ -601,12 +621,12 @@ plot_grid <- function(spec_map, cols, note, file) {
               hjust = 1.05, vjust = 1.4, size = 3, colour = "grey35") +
     facet_grid(row ~ half, scales = "free_x") +
     scale_colour_manual(values = setNames(cols, spec_map), drop = FALSE) +
-    labs(title = paste("Effect of", treat_text, "on the IMR change over the next 5 years"),
+    labs(title = paste("Effect of", treat_text, "on the", out_lab$what),
          subtitle = paste0("ATT in deaths per 1,000 live births with 95% CI, ",
                            if (APPENDIX_2024) "1970-2024 (appendix)" else "1970-2020",
-                           ". Negative = IMR fell faster than in matched controls.\n",
+                           ". ", out_lab$sign, "\n",
                            note, " EFW halves split at each year's median EFW at t-5."),
-         x = "ATT (change in IMR, per 1,000)", y = NULL, colour = NULL) +
+         x = out_lab$axis, y = NULL, colour = NULL) +
     theme_minimal(base_size = 11) +
     theme(legend.position = "bottom", strip.text = element_text(face = "bold"),
           plot.title = element_text(face = "bold"), panel.spacing = unit(1.2, "lines"))
@@ -646,8 +666,8 @@ f2 <- att_main %>%
   facet_wrap(~ pair, ncol = 1, scales = "free_x") +
   scale_colour_manual(values = spec_cols) +
   labs(title = "ATT by specification step",
-       subtitle = "IMR change t to t+5, deaths per 1,000, 95% CI",
-       x = "ATT (change in IMR, per 1,000)", y = NULL, colour = NULL) +
+       subtitle = paste0(out_lab$what, ", deaths per 1,000, 95% CI"),
+       x = out_lab$axis, y = NULL, colour = NULL) +
   theme_minimal(base_size = 11) +
   theme(legend.position = "bottom", strip.text = element_text(face = "bold", hjust = 0))
 ggsave(file.path(fig_dir, "F2_att_by_spec_step.png"), f2, width = 9, height = 9, dpi = 200)
@@ -668,8 +688,7 @@ ggsave(file.path(fig_dir, "F3_headline_contrast.png"), f3, width = 9, height = 4
 # Part 10: Robustness hooks (plan section 8; change a setting and rerun)
 # =============================================================================
 # Appendix 2024 : Sys.setenv(APPENDIX_2024 = "TRUE") and rerun
-# 20% thresholds: Sys.setenv(TREAT_SCALE = "score_pct") or "rank"
-# A1 / A2       : OUTCOME <- "IM_post" / "change_IM"
+# Outcomes      : Sys.setenv(OUTCOME = "IM_t" / "change_IM_post" / "change_IM")
 # Threshold     : THRESHOLD <- 0.75 or 0.5
 
 saveRDS(list(panel = panel, main = res_main, grid = grid_res,

@@ -1,37 +1,37 @@
 "pair","half","spec","label","estimator","att","se","n_treated","n"
-"A","EFW score above median","S1","1) Naive","PSM NN3",-1.76342382665027,3.02998650438513,6,397
-"A","EFW score above median","S1","1) Naive","PSM Kernel",1.47944884688236,2.58305063953863,6,397
-"A","EFW score above median","S1","1) Naive","Mahalanobis NN3 (BA)",2.34589389697356,1.23678323112636,6,397
-"A","EFW score above median","S2","2) + state capacity","PSM NN3",-1.64872071562136,3.40546008310213,6,397
-"A","EFW score above median","S2","2) + state capacity","PSM Kernel",1.12961960608415,2.7599757504401,6,397
-"A","EFW score above median","S2","2) + state capacity","Mahalanobis NN3 (BA)",1.75470045730002,1.16409391806805,6,397
-"A","EFW score above median","S3","3) + state capacity + con_int (headline)","PSM NN3",-0.22189171171998,2.48925071119734,6,397
-"A","EFW score above median","S3","3) + state capacity + con_int (headline)","PSM Kernel",0.231522077913384,2.63684232963036,6,397
-"A","EFW score above median","S3","3) + state capacity + con_int (headline)","Mahalanobis NN3 (BA)",1.78160281512796,1.16894653220002,6,397
-"A","EFW score below median","S1","1) Naive","PSM NN3",-3.26425744016374,1.92304799783818,34,383
-"A","EFW score below median","S1","1) Naive","PSM Kernel",-1.79262294688775,1.39484602144845,34,383
-"A","EFW score below median","S1","1) Naive","Mahalanobis NN3 (BA)",-1.34254011014906,1.08935125477586,34,383
-"A","EFW score below median","S2","2) + state capacity","PSM NN3",-1.28258295644119,2.40074075904425,34,383
-"A","EFW score below median","S2","2) + state capacity","PSM Kernel",-2.25081988673841,1.5504447168974,34,383
-"A","EFW score below median","S2","2) + state capacity","Mahalanobis NN3 (BA)",-1.06244193752941,1.28227314243786,34,383
-"A","EFW score below median","S3","3) + state capacity + con_int (headline)","PSM NN3",-1.43719157534639,2.25879314610359,34,383
-"A","EFW score below median","S3","3) + state capacity + con_int (headline)","PSM Kernel",-1.80808146763916,1.6145043462763,34,383
-"A","EFW score below median","S3","3) + state capacity + con_int (headline)","Mahalanobis NN3 (BA)",-1.37020415123182,1.19558298975149,34,383
-"C","EFW score above median","S1","1) Naive","PSM NN3",-9.17819609490535,7.39700494572145,8,432
-"C","EFW score above median","S1","1) Naive","PSM Kernel",-9.64852393431706,5.03226429850904,8,432
-"C","EFW score above median","S1","1) Naive","Mahalanobis NN3 (BA)",-9.47554167354267,3.0217898769048,8,432
-"C","EFW score above median","S2","2) + state capacity","PSM NN3",-8.46772475338997,5.20314736495989,8,432
-"C","EFW score above median","S2","2) + state capacity","PSM Kernel",-10.0787293307345,3.82489056684043,8,432
-"C","EFW score above median","S2","2) + state capacity","Mahalanobis NN3 (BA)",-10.6988998491212,3.00803140990221,8,432
-"C","EFW score above median","S3","3) + state capacity + con_int (headline)","PSM NN3",-10.0444582645027,8.90181706090726,8,432
-"C","EFW score above median","S3","3) + state capacity + con_int (headline)","PSM Kernel",-9.64546662891329,5.81527587430782,8,432
-"C","EFW score above median","S3","3) + state capacity + con_int (headline)","Mahalanobis NN3 (BA)",-10.3880927920627,2.66433058832683,8,432
-"C","EFW score below median","S1","1) Naive","PSM NN3",7.4819141379186,5.01240190482691,5,410
-"C","EFW score below median","S1","1) Naive","PSM Kernel",2.3265136367572,3.45622884032324,5,410
-"C","EFW score below median","S1","1) Naive","Mahalanobis NN3 (BA)",3.77573615268942,1.28909327390811,5,410
-"C","EFW score below median","S2","2) + state capacity","PSM NN3",3.99966019183516,4.58325952649444,5,410
-"C","EFW score below median","S2","2) + state capacity","PSM Kernel",2.24533815049126,4.18721520888651,5,410
-"C","EFW score below median","S2","2) + state capacity","Mahalanobis NN3 (BA)",1.73216353988061,2.1671824968309,5,410
-"C","EFW score below median","S3","3) + state capacity + con_int (headline)","PSM NN3",7.41388822581845,4.99414846526231,5,410
-"C","EFW score below median","S3","3) + state capacity + con_int (headline)","PSM Kernel",2.0411689910272,4.1837744858032,5,410
-"C","EFW score below median","S3","3) + state capacity + con_int (headline)","Mahalanobis NN3 (BA)",1.63300709232855,3.18707378769786,5,410
+"A","EFW score above median","S1","1) Naive","PSM NN3",9.19281037824057,11.3221938036339,6,397
+"A","EFW score above median","S1","1) Naive","PSM Kernel",6.12898847673668,7.47387665623116,6,397
+"A","EFW score above median","S1","1) Naive","Mahalanobis NN3 (BA)",3.88532818518028,4.62190421261201,6,397
+"A","EFW score above median","S2","2) + state capacity","PSM NN3",12.0177283092624,13.3227623381091,6,397
+"A","EFW score above median","S2","2) + state capacity","PSM Kernel",7.22280522755516,8.06698295891051,6,397
+"A","EFW score above median","S2","2) + state capacity","Mahalanobis NN3 (BA)",6.45718298241449,4.0697687489901,6,397
+"A","EFW score above median","S3","3) + state capacity + con_int (headline)","PSM NN3",15.3888332673362,12.0591798379935,6,397
+"A","EFW score above median","S3","3) + state capacity + con_int (headline)","PSM Kernel",9.24684148339777,8.30248887048012,6,397
+"A","EFW score above median","S3","3) + state capacity + con_int (headline)","Mahalanobis NN3 (BA)",6.15431419301871,4.20222293097657,6,397
+"A","EFW score below median","S1","1) Naive","PSM NN3",0.814376358221422,7.82230168487811,34,383
+"A","EFW score below median","S1","1) Naive","PSM Kernel",-5.60163825865249,4.76442888672598,34,383
+"A","EFW score below median","S1","1) Naive","Mahalanobis NN3 (BA)",-3.05866072585654,1.6917375964747,34,383
+"A","EFW score below median","S2","2) + state capacity","PSM NN3",-5.21702236568768,8.01551278932376,34,383
+"A","EFW score below median","S2","2) + state capacity","PSM Kernel",-1.99761188616155,5.63459166703635,34,383
+"A","EFW score below median","S2","2) + state capacity","Mahalanobis NN3 (BA)",-2.19637824155942,1.97583074647504,34,383
+"A","EFW score below median","S3","3) + state capacity + con_int (headline)","PSM NN3",-4.45200874117212,7.52892176682906,34,383
+"A","EFW score below median","S3","3) + state capacity + con_int (headline)","PSM Kernel",-1.38036175852401,5.73953550536852,34,383
+"A","EFW score below median","S3","3) + state capacity + con_int (headline)","Mahalanobis NN3 (BA)",-2.00007251979014,1.87223356337569,34,383
+"C","EFW score above median","S1","1) Naive","PSM NN3",13.8611957442702,23.4188485150898,8,432
+"C","EFW score above median","S1","1) Naive","PSM Kernel",-11.4448871856004,16.4459930905613,8,432
+"C","EFW score above median","S1","1) Naive","Mahalanobis NN3 (BA)",-17.3974914695845,8.86823243985249,8,432
+"C","EFW score above median","S2","2) + state capacity","PSM NN3",2.1039379271131,22.6380580607463,8,432
+"C","EFW score above median","S2","2) + state capacity","PSM Kernel",12.5949093834576,16.3323312630193,8,432
+"C","EFW score above median","S2","2) + state capacity","Mahalanobis NN3 (BA)",3.24752990878953,8.25026419961002,8,432
+"C","EFW score above median","S3","3) + state capacity + con_int (headline)","PSM NN3",20.7695721885232,27.9214301724653,8,432
+"C","EFW score above median","S3","3) + state capacity + con_int (headline)","PSM Kernel",10.685145249315,18.1644350058823,8,432
+"C","EFW score above median","S3","3) + state capacity + con_int (headline)","Mahalanobis NN3 (BA)",4.24919491417562,8.21729510429328,8,432
+"C","EFW score below median","S1","1) Naive","PSM NN3",-12.6865404882486,21.658331029253,5,410
+"C","EFW score below median","S1","1) Naive","PSM Kernel",3.84650469930004,11.8229085206399,5,410
+"C","EFW score below median","S1","1) Naive","Mahalanobis NN3 (BA)",10.3022391885497,7.64962164208168,5,410
+"C","EFW score below median","S2","2) + state capacity","PSM NN3",10.1208492700039,21.0879541136974,5,410
+"C","EFW score below median","S2","2) + state capacity","PSM Kernel",4.10007947343895,11.4178753134972,5,410
+"C","EFW score below median","S2","2) + state capacity","Mahalanobis NN3 (BA)",11.4549930526257,7.7366399778954,5,410
+"C","EFW score below median","S3","3) + state capacity + con_int (headline)","PSM NN3",1.61182346033291,21.3757173080711,5,410
+"C","EFW score below median","S3","3) + state capacity + con_int (headline)","PSM Kernel",3.27073013681122,12.8984064612056,5,410
+"C","EFW score below median","S3","3) + state capacity + con_int (headline)","Mahalanobis NN3 (BA)",12.2196103749011,8.07812991869525,5,410
