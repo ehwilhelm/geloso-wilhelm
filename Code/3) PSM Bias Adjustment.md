@@ -31,9 +31,9 @@ the leftover gap in IMR at $t-5$.
 
 - Each observation $i$ is a country and a 5-year EFW window from $t-5$ to
   $t$.
-- $D_i = 1$ for a treated window: a liberalization (EFW score up by 1 point
-  or more; headline) or a deliberalization (down by 1 point or more;
-  appendix). $T$ is the set of treated windows, $N_1$ their number, and $C$
+- $D_i = 1$ for a treated window: a liberalization (EFW score up by more
+  than 1 point; headline) or a deliberalization (down by more than 1 point;
+  appendix). Strict thresholds from 20 Nov, as in the literature. $T$ is the set of treated windows, $N_1$ their number, and $C$
   the comparison pool.
 - $Y_i = IMR_{i,t+5}$: the outcome, infant deaths per 1,000 live births
   (UN IGME), five years after the window.

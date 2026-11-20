@@ -12,8 +12,10 @@
 #                    ("ECONOMIC FREEDOM ALL AREAS"). Change in EFW rank is a
 #                    separate analysis (switch TREAT_SCALE; threshold to
 #                    be decided).
-#   Treatment      : liberalizer   = EFW change over t-5..t >= +1
-#                    deliberalizer = EFW change over t-5..t <= -1
+#   Treatment      : liberalizer   = EFW change over t-5..t >  +1
+#                    deliberalizer = EFW change over t-5..t <  -1
+#                    (strict, as in the literature; Eric 20 Nov. Until
+#                    20 Nov: >= +1 / <= -1, see STRICT_THRESHOLD)
 #                    Callais & Young adjacency blanking; Venezuela 2000 out.
 #   Outcome        : IMR LEVEL (Eric, 19 Nov pm, replaces the IMR change):
 #                    infant deaths per 1,000 live births ("infantmortality",
@@ -104,12 +106,16 @@ APPENDIX_2024 <- as.logical(Sys.getenv("APPENDIX_2024", "FALSE"))
 #   "change_IM_post" earlier outcome: IMR(t+5) - IMR(t)
 #   "change_IM"      earlier outcome: IMR(t) - IMR(t-5)
 OUTCOME <- Sys.getenv("OUTCOME", "IM_post")
-# TREAT_SCALE: "score" (main, EFW score change of >= +1 / <= -1 points) or
+# TREAT_SCALE: "score" (main, EFW score change of > +1 / < -1 points) or
 #   "rank" (separate analysis on the EFW percentile rank; rank 1 = freest).
 #   The 20% rank and 20% score runs were dropped on 19 Nov; the rank
 #   threshold is still to be decided.
 TREAT_SCALE <- Sys.getenv("TREAT_SCALE", "score")
 THRESHOLD      <- 1      # "score": EFW points
+# STRICT_THRESHOLD = TRUE: liberalizer > +1, deliberalizer < -1 (Eric, 20 Nov:
+# the literature, e.g. Callais & Young, uses strict inequalities).
+# FALSE: >= +1 / <= -1, the rule used until 20 Nov.
+STRICT_THRESHOLD <- as.logical(Sys.getenv("STRICT_THRESHOLD", "TRUE"))
 RANK_THRESHOLD <- NA     # "rank": percentile points of the ranking, TO DECIDE
 if (TREAT_SCALE == "rank" && is.na(RANK_THRESHOLD))
   stop("Set RANK_THRESHOLD before running the rank analysis.")
@@ -145,7 +151,8 @@ grid_years <- c(seq(1970, 2020, 5), if (APPENDIX_2024) 2024)
 
 run_tag <- paste0(if (APPENDIX_2024) "appendix_1970-2024" else "headline_1970-2020",
                   if (OUTCOME == "IM_post") "" else paste0("_", OUTCOME),
-                  if (TREAT_SCALE == "rank") "_rank" else "")
+                  if (TREAT_SCALE == "rank") "_rank" else "",
+                  if (STRICT_THRESHOLD) "" else "_ge1")
 
 # Labels that follow the outcome
 out_lab <- switch(OUTCOME,
@@ -315,14 +322,17 @@ cy_blank <- function(x) {
 treat_diff <- if (TREAT_SCALE == "rank") "EFWrdiff" else "EFWdiff"
 treat_cut  <- if (TREAT_SCALE == "rank") RANK_THRESHOLD else THRESHOLD
 treat_text <- if (TREAT_SCALE == "rank") "a large EFW rank change" else
-  "a 1-point EFW change"
+  if (STRICT_THRESHOLD) "an EFW change of more than 1 point" else
+  "an EFW change of 1 point or more"
 
 panel <- panel %>%
   arrange(country, year) %>%
   group_by(country) %>%
   mutate(
-    lib_episode   = as.integer(.data[[treat_diff]] >=  treat_cut),
-    delib_episode = as.integer(.data[[treat_diff]] <= -treat_cut),
+    lib_episode   = as.integer(if (STRICT_THRESHOLD) .data[[treat_diff]] >  treat_cut
+                               else .data[[treat_diff]] >= treat_cut),
+    delib_episode = as.integer(if (STRICT_THRESHOLD) .data[[treat_diff]] < -treat_cut
+                               else .data[[treat_diff]] <= -treat_cut),
     EFWjump = cy_blank(lib_episode),
     EFWdrop = cy_blank(delib_episode),
     EFWjump = if_else(country == "Venezuela" & year == 2000, NA_integer_, EFWjump),

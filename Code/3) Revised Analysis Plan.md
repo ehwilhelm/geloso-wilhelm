@@ -8,6 +8,13 @@ compiles through LaTeX.*
 
 ## 0c. Data updated to `Version18` (20 Nov)
 
+- **Treatment rule made strict** (Eric, 20 Nov, 10 AM): liberalizer = EFW
+  change of **more than +1**, deliberalizer = **less than -1**, as in the
+  literature. Script setting `STRICT_THRESHOLD = TRUE` (default); `FALSE`
+  restores the earlier >= +1 / <= -1 rule and writes to `..._ge1` folders.
+  Effect on `Version18`: Congo, Rep. 1990-95 (+1.00) drops out; nothing else
+  sits exactly on the threshold.
+
 - **Data:** `Datawork~Nishant/Version18.csv` (Nishant, 20 Nov). `totalpop`
   and `totalGDP` are dropped. GDP per capita is `rgdpe / pop`, both from
   PWT 11.0, now with full decimals (Eric, 20 Nov; script setting
@@ -24,10 +31,11 @@ compiles through LaTeX.*
   PWT has no earlier year. Each run lists them in
   `tables/D4_growth_filled.csv`.
 - **More treatments in both directions.** With the IMR level outcome and
-  complete covariates, the 1970-2020 headline sample has 44 liberalizations
-  (40 on `version16`) and 25 deliberalizations (12). With the 2024
-  extension: 44 and 26. The gain comes from the 1970-75 windows and, after
-  the growth fill, Russia 1990-95.
+  complete covariates and the strict rule, the 1970-2020 headline sample
+  has 43 liberalizations (40 on `version16`) and 25 deliberalizations (12).
+  With the 2024 extension: 43 and 26. The gain comes from the 1970-75
+  windows and, after the growth fill, Russia 1990-95; Congo, Rep. 1990-95
+  leaves under the strict rule.
 - **Outputs:** `Results/version18/headline_1970-2020/` and
   `Results/version18/appendix_1970-2024/`. The output folder is now named
   after the data file, so the `version16` results stay as they were.
@@ -136,7 +144,7 @@ over the same window as the EFW change (`change_IM`, `2) Analysis.R` line
 | Topic | Decision | Source |
 |---|---|---|
 | Outcome | **IMR level at $t+5$**, after the EFW window $t-5$ to $t$ (replaces the change outcome). Level at $t$ as an alternative. | Eric, 19 Nov (replaces 18 Nov) |
-| Treatment | A 5-year EFW change of +1 or more (liberalization) or -1 or less (deliberalization), with Callais & Young adjacency blanking | Vincent Notes, Oct design |
+| Treatment | A 5-year EFW change of more than +1 (liberalization) or less than -1 (deliberalization), strict as in the literature, with Callais & Young adjacency blanking | Eric, 20 Nov (replaces >= +1 / <= -1) |
 | State capacity | O'Reilly-Murphy Index of State Capacity, time-varying: `c_comp` only (`pca_comp` is an alternative, never in the same spec) | Eric, 17 and 19 Nov |
 | Sample period | Headline 1970-2020; extension to 2024 in the appendix | Eric, 19 Nov |
 | Main regressor | Change in the EFW summary index; change in EFW rank as a separate analysis | Eric, 19 Nov |
@@ -147,7 +155,7 @@ over the same window as the EFW change (`change_IM`, `2) Analysis.R` line
 | Method | PSM (NN3, kernel) and Mahalanobis NN3 | Eric, 18 Nov |
 | Pre/post measurement-error decomposition | Appendix | Eric and Vincent, 18 Nov |
 | Fertility rate | Kept as a lagged covariate (F1); no further changes | Eric, 18 Nov |
-| Jump threshold | Keep 1 point or more (not C&Y's strictly above 1). On `version11` this adds one liberalization (Congo, Rep. 1990-95, +1.00) and no deliberalizations. | Eric, 18 Nov |
+| Jump threshold | **Strictly more than 1 point** in either direction, as in the literature (replaces the 18 Nov choice of 1 point or more). On `Version18` this drops one liberalization (Congo, Rep. 1990-95, +1.00) and no deliberalizations. Script setting `STRICT_THRESHOLD` | Eric, 20 Nov |
 
 ## 2. Design
 
@@ -401,8 +409,8 @@ the 2015-20 window (outcome 2020-24) needs IMR for 2024 (present) and the
   the panel** (92 in 51 panel countries, for example Kuwait 2000-2015,
   Zimbabwe 1970-1990 and many 2000 rows; 66 in 12 countries absent
   entirely, for example Bahrain, Belarus, Iraq). Inherited from
-  `merged.csv`. They hide up to 28 more treated windows (19 liberalizations,
-  9 deliberalizations). List for Nishant:
+  `merged.csv`. They hide up to 26 more treated windows of more than 1
+  point (18 liberalizations, 8 deliberalizations). List for Nishant:
   `reviews/version18_missing_efw_rows.csv` in the project files.
 - The panel's EFW is the 2026 file's "EFW Ratings" sheet; the "EFW Panel
   Dataset" sheet's summary index differs (sd 0.32 points). To confirm which
@@ -493,26 +501,28 @@ Eric is still validating; see the data flags in the thread and Section 6b.
 ## 9c. Run on `Version18` (20 Nov)
 
 Results are in `Results/version18/headline_1970-2020/` and
-`Results/version18/appendix_1970-2024/`, rerun after the growth fill (44
-liberalizations and 25 deliberalizations in the headline sample). ATT on
-the IMR level at $t+5$, liberalizers, 1970-2020, bootstrap SE in
-parentheses:
+`Results/version18/appendix_1970-2024/`, rerun after the growth fill and
+with the strict treatment rule (43 liberalizations and 25
+deliberalizations in the headline sample). ATT on the IMR level at $t+5$,
+liberalizers, 1970-2020, bootstrap SE in parentheses (* = p < 0.05):
 
 | Estimator | S1 naive | S2 + `c_comp` | S3 + `con_int` |
 |---|---|---|---|
-| PSM NN3, plain | -6.09 (6.29) | -5.45 (6.41) | -1.83 (6.76) |
-| PSM NN3, bias-adjusted | -2.99 (2.65) | -0.73 (3.00) | -2.37 (2.60) |
-| PSM kernel, plain | -4.07 (4.94) | -2.19 (4.95) | -1.84 (5.37) |
-| PSM kernel, bias-adjusted | -0.47 (2.38) | -0.58 (2.60) | -1.15 (2.48) |
-| Mahalanobis NN3 (bias-adjusted) | -1.92 (1.43) | -1.46 (1.50) | -0.57 (1.30) |
+| PSM NN3, plain | -1.11 (6.17) | -7.75 (5.38) | -1.32 (6.40) |
+| PSM NN3, bias-adjusted | -0.80 (2.64) | -2.88 (2.86) | -1.60 (2.79) |
+| PSM kernel, plain | -5.06 (4.43) | -2.46 (4.80) | -2.64 (5.22) |
+| PSM kernel, bias-adjusted | -2.49 (2.10) | -1.37 (2.40) | -1.63 (2.52) |
+| Mahalanobis NN3 (bias-adjusted) | -2.84 (1.39)* | -2.85 (1.50) | -1.22 (1.23) |
 
-No headline matching estimate is significant at 5%, for liberalizers or for
-deliberalizers (in the 2024 appendix, only Mahalanobis S1 is, -2.66, SE
-1.36). Adding one treated country moved plain NN3 S3 from -5.50 to -1.83;
-the bias-adjusted estimates moved by less than 0.5. The regression benchmark
-(T6, continuous EFW change, year fixed effects) gives about -2.4 to -2.5
-deaths per 1,000 per EFW point at every step, significant at 5%, and is
-unchanged by `con_int`.
+Mahalanobis S1 is significant at 5% (S2 just misses, p about 0.06);
+adding `con_int` cuts it to -1.22 and removes significance. In the 2024
+appendix, Mahalanobis S1 (-3.23) and S2 (-3.73) are significant and S3
+(-1.88) is not. No PSM estimate and no deliberalizer estimate is
+significant. Plain NN3 is unstable: dropping one treated country (Congo,
+Rep.) moved S1 from -6.09 to -1.11. The regression benchmark (T6,
+continuous EFW change, year fixed effects) does not depend on the threshold:
+about -2.4 to -2.5 deaths per 1,000 per EFW point at every step,
+significant at 5%, unchanged by `con_int`.
 
 ## 10. Project workplan
 
