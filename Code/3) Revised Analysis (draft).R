@@ -90,8 +90,12 @@ find_root <- function() {
 root <- find_root()
 
 # RA data (read-only). Override with Sys.setenv(REVISED_CSV = "...").
+# Default (20 Nov): Version18 completed with the country-years that the EFW
+# Ratings sheet and UN IGME cover but Version18 lacked, built by
+# "Code/3a) Update Version18 panel.R". Nishant's own file:
+# file.path(root, "Datawork~Nishant", "Version18.csv").
 DATA_FILE <- Sys.getenv("REVISED_CSV",
-  file.path(root, "Datawork~Nishant", "Version18.csv"))
+  file.path(root, "Data", "Version18_updated.csv"))
 
 # APPENDIX_2024 = FALSE: headline, 1970-2020.
 # APPENDIX_2024 = TRUE : appendix, adds the 2015-20 EFW window with a

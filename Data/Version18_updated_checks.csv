@@ -1,0 +1,118 @@
+"variable","rows","identical","v18_only","source_only","differ"
+"U5MR",1486,1486,0,0,0
+"U5MR_lower_bound",1486,1486,0,0,0
+"U5MR_upper_bound",1486,1486,0,0,0
+"infantmortality",1486,1462,24,0,0
+"IM_lower_bound",1486,1482,4,0,0
+"IM_upper_bound",1486,1482,4,0,0
+"rgdpe",1486,1486,0,0,0
+"pop",1486,1486,0,0,0
+"hc",1486,1486,0,0,0
+"gdppc",1486,1486,0,0,0
+"gdppc2",1486,1486,0,0,0
+"lngdppc",1486,1486,0,0,0
+"lngdppc2",1486,1486,0,0,0
+"gdppc_5growth",1486,1478,0,8,0
+"fertilrate",1486,1486,0,0,0
+"oldagedep",1486,1486,0,0,0
+"polity5",1486,1486,0,0,0
+"urbanpop",1486,1486,0,0,0
+"c_nar",1486,1486,0,0,0
+"c_fisc",1486,1486,0,0,0
+"c_comp",1486,1486,0,0,0
+"pca_nar",1486,1486,0,0,0
+"pca_fisc",1486,1486,0,0,0
+"pca_comp",1486,1486,0,0,0
+"v2x_rule",1486,1486,0,0,0
+"v2svstterr",1486,1486,0,0,0
+"v2clrspct",1486,1486,0,0,0
+"v2dlencmps",1486,1486,0,0,0
+"v2stfisccap",1486,1486,0,0,0
+"v2peedueq",1486,1486,0,0,0
+"v2x_polyarchy",1486,1486,0,0,0
+"v2x_libdem",1486,1486,0,0,0
+"v2x_partipdem",1486,1486,0,0,0
+"v2x_delibdem",1486,1486,0,0,0
+"v2x_egaldem",1486,1486,0,0,0
+"ECONOMIC FREEDOM ALL AREAS",1486,1486,0,0,0
+"EFW RANK",1486,1486,0,0,0
+"EFW QUARTILE",1486,1486,0,0,0
+"1Ai Government consumption without interest payments",1486,1486,0,0,0
+"data...8",1486,1486,0,0,0
+"1Aii Government consumption plus interest payments",1486,1486,0,0,0
+"data...10",1486,1486,0,0,0
+"1A Government consumption",1486,1486,0,0,0
+"1B  Transfers and subsidies",1486,1486,0,0,0
+"data...13",1486,1486,0,0,0
+"1C  Government investment",1486,1486,0,0,0
+"data...15",1486,1486,0,0,0
+"1Di Top marginal income tax rate",1486,1486,0,0,0
+"data...17",1486,1486,0,0,0
+"1Dii Top marginal income and payroll tax rate",1486,1486,0,0,0
+"data...19",1486,1486,0,0,0
+"1D  Top marginal tax rate",1486,1486,0,0,0
+"IE State ownership",1486,1486,0,0,0
+"Area 1 Size of Government",1486,1486,0,0,0
+"Area 1 Rank",1486,1486,0,0,0
+"2A  Judicial independence",1486,1486,0,0,0
+"2B  Impartial courts",1486,1486,0,0,0
+"2C  Property rights",1486,1486,0,0,0
+"2D  Military interference",1486,1486,0,0,0
+"2E Legal integrity",1486,1486,0,0,0
+"2F Contracts",1486,1486,0,0,0
+"2G Real property",1486,1486,0,0,0
+"2H Police and crime",1486,1486,0,0,0
+"Gender Disparity Index",1486,1486,0,0,0
+"Area 2 Legal System & Property Rights -- Without Gender Adjustment",1486,1486,0,0,0
+"Area 2 Legal System & Property Rights -- With Gender Adjustment",1486,1486,0,0,0
+"Area 2 Rank",1486,1486,0,0,0
+"3A  Money growth",1486,1486,0,0,0
+"data...37",1486,1486,0,0,0
+"3B  Standard deviation of inflation",1486,1486,0,0,0
+"data...39",1486,1486,0,0,0
+"3C  Inflation",1486,1486,0,0,0
+"data...41",1486,1486,0,0,0
+"3D  Foreign currency bank accounts",1486,1486,0,0,0
+"Area 3 Sound Money",1486,1486,0,0,0
+"Area 3 Rank",1486,1486,0,0,0
+"4Ai  Trade tax revenue",1486,1486,0,0,0
+"data...46",1486,1486,0,0,0
+"4Aii  Mean tariff rate",1486,1486,0,0,0
+"data...48",1486,1486,0,0,0
+"4Aiii  Standard deviation of tariff rates",1486,1486,0,0,0
+"data...50",1486,1486,0,0,0
+"4A  Tariffs",1486,1486,0,0,0
+"4Bi  Non-tariff trade barriers",1486,1486,0,0,0
+"4Bii  Costs of importing and exporting",1486,1486,0,0,0
+"4B  Regulatory trade barriers",1486,1486,0,0,0
+"4C  Black market exchange rates",1486,1486,0,0,0
+"4Di  Financial openness",1486,1486,0,0,0
+"4Dii  Capital controls",1486,1486,0,0,0
+"4Diii Freedom of foreigners to visit",1486,1486,0,0,0
+"4Div Protection of Foreign Assets",1486,1486,0,0,0
+"4D  Controls of the movement of capital and people",1486,1486,0,0,0
+"Area 4 Freedom to trade internationally",1486,1486,0,0,0
+"Area 4 Rank",1486,1486,0,0,0
+"5Ai  Ownership of banks",1486,1486,0,0,0
+"5Aii Private sector credit",1486,1486,0,0,0
+"5Aiii  Interest rate controls/negative real interest rates)",1486,1486,0,0,0
+"5A  Credit market regulation",1486,1486,0,0,0
+"5Bi  Labor regulations and minimum wage",1486,1486,0,0,0
+"5Bii  Hiring and firing regulations",1486,1486,0,0,0
+"5Biii  Flexible wage determination",1486,1486,0,0,0
+"5Biv  Hours Regulations",1486,1486,0,0,0
+"5Bv Cost of worker dismissal",1486,1486,0,0,0
+"5Bvi  Conscription",1486,1486,0,0,0
+"5Bvii Foreign Labor",1486,1486,0,0,0
+"5B  Labor market regulations",1486,1486,0,0,0
+"5Ci  Regulatory Burden",1486,1486,0,0,0
+"5Cii  Bureacracy costs",1486,1486,0,0,0
+"5Ciii  Impartial Public Administration",1486,1486,0,0,0
+"5Civ Tax compliance",1486,1486,0,0,0
+"5C  Business regulation",1486,1486,0,0,0
+"5Di  Market openness",1486,1486,0,0,0
+"5Dii Business Permits",1486,1486,0,0,0
+"5Diii Distorton of the business environment",1486,1486,0,0,0
+"5D Freedom to enter markets and compete",1486,1486,0,0,0
+"Area 5 Regulation",1486,1486,0,0,0
+"Area 5 Rank",1486,1486,0,0,0

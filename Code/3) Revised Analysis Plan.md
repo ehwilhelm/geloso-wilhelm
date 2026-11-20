@@ -6,6 +6,30 @@ November 2026, and 20 November 2026 for `Version18`. Companion script:
 `Datawork~Nishant/Version18.csv` and runs end to end. Plain ASCII so it
 compiles through LaTeX.*
 
+## 0d. Version18 completed from the EFW Ratings sheet (20 Nov, 10:30 AM)
+
+- **Data:** `Data/Version18_updated.csv`, built by
+  `Code/3a) Update Version18 panel.R` (Eric, 20 Nov: the raw EFW source is
+  the "EFW Ratings" sheet of the 2026 EFW file; update Version18
+  accordingly). It is Version18 plus the 158 country-years that have an EFW
+  rating and a UN IGME estimate but were missing from Version18 (92 in 51
+  countries already in the panel, 66 in 12 new countries). Nishant's
+  `Version18.csv` is not changed. The analysis script reads the updated
+  file by default.
+- **How the added rows are built:** every variable is rebuilt from the
+  files in `Datawork~Nishant` (UN IGME 2025, PWT 11.0 full precision, the
+  WDI extract, OWID Polity5, the O'Reilly-Murphy/V-Dem state capacity file,
+  V-Dem v16, the EFW Ratings sheet). The same rebuild reproduces 113 of the
+  117 source variables in all 1,486 existing rows exactly; the other 4 are
+  explained in Section 6c. Existing values are kept byte for byte, except
+  the `lag*` columns of 60 rows whose previous row is new and 5-year growth
+  in 8 rows that PWT can fill. Checks: `Data/Version18_updated_checks.csv`.
+- **Treatments usable in the matching** (strict rule, 1970-2020): 53
+  liberalizations (43 on Version18) and 29 deliberalizations (25). With the
+  2024 extension: 53 and 30.
+- **Outputs:** `Results/version18_updated/`. `Results/version18/` keeps the
+  runs on Nishant's file for comparison.
+
 ## 0c. Data updated to `Version18` (20 Nov)
 
 - **Treatment rule made strict** (Eric, 20 Nov, 10 AM): liberalizer = EFW
@@ -413,10 +437,19 @@ the 2015-20 window (outcome 2020-24) needs IMR for 2024 (present) and the
   point (18 liberalizations, 8 deliberalizations). List for Nishant:
   `reviews/version18_missing_efw_rows.csv` in the project files.
 - The panel's EFW is the 2026 file's "EFW Ratings" sheet; the "EFW Panel
-  Dataset" sheet's summary index differs (sd 0.32 points). To confirm which
-  series the paper uses.
+  Dataset" sheet's summary index differs (sd 0.32 points). Settled 20 Nov
+  (Eric): the "EFW Ratings" sheet is the source.
 - The 2024 `gdppc_5growth` in the panel is a 3-year change (2020 to 2023
   PWT). Not used in any matching.
+- Version18's 2024 rows mix years: IGME, EFW and fertility are 2024 values,
+  but old-age dependency, urban population, the state capacity variables
+  and V-Dem are **2025** values. Not used in any matching (only the 2024
+  IMR enters, as an outcome). The added 2024 rows follow the same
+  convention; to fix in Nishant's next version.
+- 24 IMR values are not from UN IGME 2025: Hong Kong and Taiwan 1970-2015
+  (not IGME countries; no bounds, so no `con_int`) and Cyprus 1970, Iran
+  1970, Madagascar 1970 and South Africa 1975 (IGME 2025 starts later for
+  these; values and bounds from an earlier round).
 - Venezuela: PWT 11.0 `rgdpe` per capita falls from 18,518 (2010) to 5,488
   (2015) and 165 (2020). Outside the headline (covariates at $t-5$ end in
   2010) but inside the 2024 appendix.
@@ -498,31 +531,33 @@ Results are in `Results/version16/headline_1970-2020/` and
 `Results/version16/appendix_1970-2024/`. They are a first pass on data that
 Eric is still validating; see the data flags in the thread and Section 6b.
 
-## 9c. Run on `Version18` (20 Nov)
+## 9c. Run on `Version18_updated` (20 Nov, 10:30 AM)
 
-Results are in `Results/version18/headline_1970-2020/` and
-`Results/version18/appendix_1970-2024/`, rerun after the growth fill and
-with the strict treatment rule (43 liberalizations and 25
-deliberalizations in the headline sample). ATT on the IMR level at $t+5$,
-liberalizers, 1970-2020, bootstrap SE in parentheses (* = p < 0.05):
+Results are in `Results/version18_updated/headline_1970-2020/` and
+`Results/version18_updated/appendix_1970-2024/` (strict treatment rule;
+53 liberalizations and 29 deliberalizations in the headline sample). ATT on
+the IMR level at $t+5$, liberalizers, 1970-2020, bootstrap SE in
+parentheses (* = p < 0.05):
 
 | Estimator | S1 naive | S2 + `c_comp` | S3 + `con_int` |
 |---|---|---|---|
-| PSM NN3, plain | -1.11 (6.17) | -7.75 (5.38) | -1.32 (6.40) |
-| PSM NN3, bias-adjusted | -0.80 (2.64) | -2.88 (2.86) | -1.60 (2.79) |
-| PSM kernel, plain | -5.06 (4.43) | -2.46 (4.80) | -2.64 (5.22) |
-| PSM kernel, bias-adjusted | -2.49 (2.10) | -1.37 (2.40) | -1.63 (2.52) |
-| Mahalanobis NN3 (bias-adjusted) | -2.84 (1.39)* | -2.85 (1.50) | -1.22 (1.23) |
+| PSM NN3, plain | -5.89 (5.38) | -6.24 (5.45) | -2.88 (5.24) |
+| PSM NN3, bias-adjusted | -2.07 (2.42) | -2.54 (2.47) | -0.76 (2.29) |
+| PSM kernel, plain | -4.58 (3.33) | -1.69 (3.64) | -1.07 (3.57) |
+| PSM kernel, bias-adjusted | -2.76 (2.00) | -1.90 (2.07) | -1.17 (2.04) |
+| Mahalanobis NN3 (bias-adjusted) | -2.69 (1.36)* | -2.28 (1.34) | -1.19 (1.20) |
 
-Mahalanobis S1 is significant at 5% (S2 just misses, p about 0.06);
-adding `con_int` cuts it to -1.22 and removes significance. In the 2024
-appendix, Mahalanobis S1 (-3.23) and S2 (-3.73) are significant and S3
-(-1.88) is not. No PSM estimate and no deliberalizer estimate is
-significant. Plain NN3 is unstable: dropping one treated country (Congo,
-Rep.) moved S1 from -6.09 to -1.11. The regression benchmark (T6,
-continuous EFW change, year fixed effects) does not depend on the threshold:
-about -2.4 to -2.5 deaths per 1,000 per EFW point at every step,
-significant at 5%, unchanged by `con_int`.
+Every liberalizer estimate is negative and every one shrinks toward zero
+when `con_int` is added (S3 vs S2), by 0.6 to 3.4 deaths per 1,000. Only
+Mahalanobis S1 is significant at 5% (S2 p about 0.09). No deliberalizer
+estimate is significant. In the 2024 appendix nothing is significant at 5%
+(Mahalanobis S1 -2.47, SE 1.32). Regression benchmark (T6): -2.1 to -2.2
+deaths per 1,000 per EFW point with covariates (p about 0.02), unchanged by
+`con_int`; the EFW change alone is no longer significant (-1.7, p 0.26).
+
+On Nishant's `Version18.csv` (strict rule, 43 and 25 treated;
+`Results/version18/`): Mahalanobis S1 -2.84 (1.39), S2 -2.85 (1.50), S3
+-1.22 (1.23); no PSM estimate significant.
 
 ## 10. Project workplan
 
@@ -540,7 +575,7 @@ significant at 5%, unchanged by `con_int`.
 
 | Item | What | Status (20 Nov) |
 |---|---|---|
-| 1 | Review and validate the updated panel once Nishant adds unrounded `rgdpe`, `pop` and `hc` and the missing prior-period GDP for 5-year growth (147 country-years listed in `version16_missing_prior_gdp.csv`) | Done on `Version18` (Section 6c): PWT values confirmed exactly, growth gaps filled in the script. Open: 158 missing country-years, EFW series |
+| 1 | Review and validate the updated panel once Nishant adds unrounded `rgdpe`, `pop` and `hc` and the missing prior-period GDP for 5-year growth (147 country-years listed in `version16_missing_prior_gdp.csv`) | Done on `Version18` (Section 6c): PWT values confirmed exactly, growth gaps filled. EFW Ratings sheet confirmed as the EFW source; the 158 missing country-years added in `Data/Version18_updated.csv` (Section 0d) |
 | 2 | Specifications on the IMR level, with bias-adjusted PSM | Rerun on `Version18` (Section 9c) |
 | 2b | Bias adjustment in mathematical form, with an explanation, in its own markdown file | Draft: `Code/3) PSM Bias Adjustment.md` |
 | 3 | Liberalizers as the headline, deliberalizers in the appendix; possibly a combined-magnitude analysis of liberalizers and deliberalizers in the appendix | First part done (figures F1, F1b). Combined magnitude: open, to define with Eric |
