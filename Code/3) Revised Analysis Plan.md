@@ -1,9 +1,31 @@
 # Revised analysis plan: liberalization, state capacity and data quality
 
 *Draft for Eric's review. First version 16 November 2026, revised 18 and 19
-November 2026. Companion script: `Code/3) Revised Analysis (draft).R`, which
-now reads `Datawork~Nishant/version16.csv` and runs end to end. Plain ASCII so
-it compiles through LaTeX.*
+November 2026, and 20 November 2026 for `Version18`. Companion script:
+`Code/3) Revised Analysis (draft).R`, which now reads
+`Datawork~Nishant/Version18.csv` and runs end to end. Plain ASCII so it
+compiles through LaTeX.*
+
+## 0c. Data updated to `Version18` (20 Nov)
+
+- **Data:** `Datawork~Nishant/Version18.csv` (Nishant, 20 Nov). `totalpop`
+  and `totalGDP` are dropped. GDP per capita is `rgdpe / pop`, both from
+  PWT 11.0, now with full decimals (Eric, 20 Nov; script setting
+  `GDP_SOURCE = "rgdpe_pop"`, the new default). `hc` also has decimals.
+- **5-year GDP per capita growth** now uses the panel's `gdppc_5growth`
+  where the previous 5-year point is not a panel row (Nishant filled 142 of
+  them from PWT, listed in `Datawork~Nishant/gdp_growth_prior_rows.csv`).
+  Where both points are panel rows, the script's own log difference is used;
+  the two agree exactly.
+- **More treatments in both directions.** With the IMR level outcome and
+  complete covariates, the 1970-2020 headline sample has 43 liberalizations
+  (40 on `version16`) and 25 deliberalizations (12). With the 2024
+  extension: 43 and 26. The gain comes from the 1970-75 windows.
+- **Outputs:** `Results/version18/headline_1970-2020/` and
+  `Results/version18/appendix_1970-2024/`. The output folder is now named
+  after the data file, so the `version16` results stay as they were.
+- Data review: Section 6c, and the full review in the project files
+  (`reviews/Version18 Data Review 2026-11-20.md`).
 
 ## 0b. Outcome switched to IMR levels (19 Nov, afternoon)
 
@@ -360,6 +382,34 @@ the 2015-20 window (outcome 2020-24) needs IMR for 2024 (present) and the
   automatically once the panel has them.
 - `c_comp` and `pca_comp` correlate at 0.99999.
 
+## 6c. Data flags from `Version18` (20 Nov)
+
+- Fixed: `rgdpe`, `pop` and `hc` have decimals again (no `pop` = 0 rows),
+  and 5-year growth is filled for 1970 and the other prior years on the
+  19 Nov list. All 1,486 rows round to the PWT 11.0 values in
+  `Downloaded Dataset.zip`. That PWT CSV is itself rounded to whole numbers,
+  so the decimals cannot be checked against it: to ask Nishant which PWT
+  file he used.
+- 12 rows still lack 5-year growth. Four cannot be filled because PWT has
+  no prior year (Hungary 1970; Estonia, Lithuania and Russia 1990). Eight
+  could be filled from PWT (Bahamas and Barbados 1975, Iceland, Luxembourg
+  and Malta 1970, Belize 1980, Kuwait 2020, Seychelles 2015); none of them
+  would bring back a treated episode.
+- Venezuela: PWT 11.0 `rgdpe` per capita falls from 18,518 (2010) to 5,488
+  (2015) and 165 (2020). Outside the headline (covariates at $t-5$ end in
+  2010) but inside the 2024 appendix.
+- Growth from `rgdpe` is noisy (5-year log growth beyond +/-1 for Nigeria,
+  Zimbabwe, Syria, Azerbaijan, Guyana, Venezuela). A robustness run with
+  growth from PWT `rgdpna` is worth adding (R9).
+- Pakistan 1970 Polity5 is missing because the OWID file names it
+  "Pakistan (former)"; this drops the Pakistan 1970-75 deliberalization.
+- `c_comp` is missing before 2005 for Iceland, Peru, Tanzania and Uganda in
+  the source file itself.
+- Episodes still lost to missing covariates: 8 liberalizations (Belize
+  2000-05, Estonia, Iceland 1985-90, Malta, Peru, Russia, Tanzania and Uganda
+  1990-95) and 4 deliberalizations (Iceland 1970-75 and 2005-10, Pakistan
+  and Peru 1970-75).
+
 ## 7. Diagnostics and visualizations (to be tuned after Eric's review)
 
 **Tables:**
@@ -408,6 +458,8 @@ the 2015-20 window (outcome 2020-24) needs IMR for 2024 (present) and the
 - R7: fertility options F2-F5 (not wired into the 19 Nov script).
 - R8: World Bank Statistical Capacity Indicator as the data-quality measure,
   2005-2020 only, once merged.
+- R9: 5-year GDP per capita growth from PWT `rgdpna` instead of `rgdpe`
+  (PWT's recommendation for growth over time; see Section 6c).
 
 ## 9. How results map to the case-study matrix
 
@@ -424,6 +476,26 @@ Results are in `Results/version16/headline_1970-2020/` and
 `Results/version16/appendix_1970-2024/`. They are a first pass on data that
 Eric is still validating; see the data flags in the thread and Section 6b.
 
+## 9c. Run on `Version18` (20 Nov)
+
+Results are in `Results/version18/headline_1970-2020/` and
+`Results/version18/appendix_1970-2024/` (43 liberalizations and 25
+deliberalizations in the headline sample). ATT on the IMR level at $t+5$,
+liberalizers, 1970-2020, bootstrap SE in parentheses:
+
+| Estimator | S1 naive | S2 + `c_comp` | S3 + `con_int` |
+|---|---|---|---|
+| PSM NN3, plain | -8.82 (6.71) | -7.72 (6.86) | -5.50 (6.49) |
+| PSM NN3, bias-adjusted | -3.38 (2.84) | -1.16 (3.03) | -2.23 (2.69) |
+| PSM kernel, plain | -3.54 (4.69) | -1.34 (5.00) | -1.57 (5.16) |
+| PSM kernel, bias-adjusted | -0.44 (2.36) | -0.56 (2.54) | -1.58 (2.45) |
+| Mahalanobis NN3 (bias-adjusted) | -1.78 (1.44) | -1.54 (1.54) | -0.51 (1.33) |
+
+No matching estimate is significant at 5%, for liberalizers or for
+deliberalizers. The regression benchmark (T6, continuous EFW change, year
+fixed effects) gives about -2.5 deaths per 1,000 per EFW point at every
+step, significant at 5%, and is unchanged by `con_int`.
+
 ## 10. Project workplan
 
 | Step | Who | What | Status (18 Nov) |
@@ -438,10 +510,10 @@ Eric is still validating; see the data flags in the thread and Section 6b.
 
 ### Next steps (Eric, 19 Nov, for 20 Nov)
 
-| Item | What | Status (19 Nov evening) |
+| Item | What | Status (20 Nov) |
 |---|---|---|
-| 1 | Review and validate the updated panel once Nishant adds unrounded `rgdpe`, `pop` and `hc` and the missing prior-period GDP for 5-year growth (147 country-years listed in `version16_missing_prior_gdp.csv`) | Waiting on Nishant. `version16.csv` as of 19 Nov still has whole-number `hc` and `pop` and no 1970 growth. |
-| 2 | Specifications on the IMR level, with bias-adjusted PSM | Done on `version16` (script default); rerun on the updated panel |
+| 1 | Review and validate the updated panel once Nishant adds unrounded `rgdpe`, `pop` and `hc` and the missing prior-period GDP for 5-year growth (147 country-years listed in `version16_missing_prior_gdp.csv`) | Done on `Version18` (Section 6c). Open: Nishant's PWT source file, 8 fillable growth rows |
+| 2 | Specifications on the IMR level, with bias-adjusted PSM | Rerun on `Version18` (Section 9c) |
 | 2b | Bias adjustment in mathematical form, with an explanation, in its own markdown file | Draft: `Code/3) PSM Bias Adjustment.md` |
 | 3 | Liberalizers as the headline, deliberalizers in the appendix; possibly a combined-magnitude analysis of liberalizers and deliberalizers in the appendix | First part done (figures F1, F1b). Combined magnitude: open, to define with Eric |
 | 4 | Prepare the agreed diagnostics (Section 7) | Tables T1-T7 and D1-D3 run; love plot and `con_int` vs IMR figure still to add |

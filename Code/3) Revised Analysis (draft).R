@@ -1,5 +1,5 @@
 # =============================================================================
-# 3) Revised Analysis (draft).R      DRAFT, 19 Nov 2026 - reads version16.csv
+# 3) Revised Analysis (draft).R      DRAFT, 20 Nov 2026 - reads Version18.csv
 #                                    Outcome switched to IMR LEVELS (19 Nov pm)
 #
 # Companion to "3) Revised Analysis Plan.md" (read that first).
@@ -41,19 +41,21 @@
 #   Sample         : headline 1970-2020 (last EFW window 2010-15, outcome
 #                    2015-20). Appendix: extension to 2024 (APPENDIX_2024).
 #
-# Data notes for version16.csv:
-#   - GDP per capita is the panel's `gdppc` column (Our World in Data, per
-#     Eric 19 Nov); GDP_SOURCE = "rgdpe_pop" rebuilds it from PWT instead.
-#     In version16 `gdppc` still equals rgdpe / pop exactly in every row.
-#   - 5-yr GDP pc growth at 1970 needs 1965 GDP pc. If the panel has 1965
-#     rows, they are read and used for that growth (and nothing else is
-#     estimated on them), which brings the 1970-75 EFW windows back.
+# Data notes for Version18.csv (Nishant, 20 Nov):
+#   - totalpop and totalGDP are dropped. GDP per capita = rgdpe / pop, both
+#     from PWT 11.0 (Eric, 20 Nov), now with full decimals.
+#   - 5-yr GDP pc growth: the panel's `gdppc_5growth` column is used. Where
+#     the previous 5-year point is not a panel row (e.g. 1965 for 1970),
+#     Nishant computed it from PWT (Datawork~Nishant/gdp_growth_prior_rows.csv).
+#     Where the panel has both points, it equals the log difference computed
+#     here. If the panel ever has 1965 rows, they are read for growth only.
 #   - PWT has no 2024 release yet: the 2024 rows carry 2023 PWT values.
 #   - Polity5 ends in 2018; the 2018 value stands in for 2020 and later.
 #   - The panel's lag* columns are not used; all lags are rebuilt here.
 #
 # Data: Datawork~Nishant is READ-ONLY. Nothing is written there.
-# Outputs: Results/version16/ (tables/, figures/). October results untouched.
+# Outputs: Results/<data file name>/ (e.g. Results/version18/). Earlier
+# results (Results/version16/, October Results/) stay untouched.
 # =============================================================================
 
 
@@ -82,7 +84,7 @@ root <- find_root()
 
 # RA data (read-only). Override with Sys.setenv(REVISED_CSV = "...").
 DATA_FILE <- Sys.getenv("REVISED_CSV",
-  file.path(root, "Datawork~Nishant", "version16.csv"))
+  file.path(root, "Datawork~Nishant", "Version18.csv"))
 
 # APPENDIX_2024 = FALSE: headline, 1970-2020.
 # APPENDIX_2024 = TRUE : appendix, adds the 2015-20 EFW window with a
@@ -109,7 +111,7 @@ if (TREAT_SCALE == "rank" && is.na(RANK_THRESHOLD))
 
 SC_VARS <- "c_comp"     # O'Reilly-Murphy ISC. Alternative: "pca_comp" (r = 0.99999);
                         # never both in one specification (Eric, 19 Nov)
-GDP_SOURCE <- "gdppc"   # "gdppc" (panel column, OWID) | "rgdpe_pop" (PWT)
+GDP_SOURCE <- "rgdpe_pop"  # "rgdpe_pop" (PWT, Eric 20 Nov) | "gdppc" (panel column)
 FERT_OPTION <- "F1"                 # F1 keep lagged fertility (decided 18 Nov)
 
 B_BOOT      <- as.integer(Sys.getenv("B_BOOT", "200"))
@@ -139,7 +141,8 @@ out_lab <- switch(OUTCOME,
   change_IM      = list(what = "IMR change over the EFW window",
                         axis = "ATT (change in IMR t-5 to t, per 1,000)",
                         sign = "Negative = IMR fell faster than in matched controls."))
-out_dir <- file.path(root, "Results", "version16", run_tag)
+data_tag <- tolower(tools::file_path_sans_ext(basename(DATA_FILE)))
+out_dir <- file.path(root, "Results", data_tag, run_tag)
 tab_dir <- file.path(out_dir, "tables")
 fig_dir <- file.path(out_dir, "figures")
 dir.create(tab_dir, recursive = TRUE, showWarnings = FALSE)
@@ -160,11 +163,12 @@ if (any(raw$year == 1965)) {
 }
 
 level_vars <- c("infantmortality", "IM_lower_bound", "IM_upper_bound",
-                "EFW", "EFW_rank", "gdppc", "rgdpe", "pop", "hc", "fertilrate",
+                "EFW", "EFW_rank", "gdppc", "gdppc_5growth_panel", "rgdpe", "pop", "hc", "fertilrate",
                 "oldagedep", "polity5", "urbanpop", SC_VARS)
 
 panel <- raw %>%
-  rename(EFW = `ECONOMIC FREEDOM ALL AREAS`, EFW_rank = `EFW RANK`) %>%
+  rename(EFW = `ECONOMIC FREEDOM ALL AREAS`, EFW_rank = `EFW RANK`,
+         gdppc_5growth_panel = gdppc_5growth) %>%
   filter(year %in% grid_years) %>%
   dplyr::select(country, year, all_of(level_vars)) %>%
   mutate(across(all_of(level_vars), ~ suppressWarnings(as.numeric(.)))) %>%
@@ -186,7 +190,10 @@ panel <- raw %>%
     lngdppc2 = lngdppc^2,
     window      = year - lag(year),       # 5 (4 for 2020-2024)
     window_next = lead(year) - year,      # 5 (4 for 2020-2024)
-    gdppc_5growth = (lngdppc - lag(lngdppc)) * 5 / window,
+    # 5-yr growth: computed log difference where the panel has the previous
+    # point; otherwise the panel's own value (prior years filled by Nishant)
+    gdppc_5growth = coalesce((lngdppc - lag(lngdppc)) * 5 / window,
+                             gdppc_5growth_panel),
     # Data quality: width of the IGME 90% interval (deaths per 1,000)
     con_int = IM_upper_bound - IM_lower_bound,
     # Outcomes (C&Y timing: treatment over t-5..t, outcome over t..t+5)
