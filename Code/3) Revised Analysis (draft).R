@@ -49,6 +49,11 @@
 #     Nishant computed it from PWT (Datawork~Nishant/gdp_growth_prior_rows.csv).
 #     Where the panel has both points, it equals the log difference computed
 #     here. If the panel ever has 1965 rows, they are read for growth only.
+#   - The 12 growth values still missing in Version18 are filled here
+#     (GROWTH_FILL): 8 from PWT 11.0 ("PWT csv.zip", full precision) and the
+#     4 that PWT cannot give (Hungary 1970; Estonia, Lithuania, Russia 1990)
+#     from the Maddison Project. List: tables/D4_growth_filled.csv.
+#   - Version18 rgdpe, pop and hc equal "PWT csv.zip" exactly (20 Nov check).
 #   - PWT has no 2024 release yet: the 2024 rows carry 2023 PWT values.
 #   - Polity5 ends in 2018; the 2018 value stands in for 2020 and later.
 #   - The panel's lag* columns are not used; all lags are rebuilt here.
@@ -112,6 +117,21 @@ if (TREAT_SCALE == "rank" && is.na(RANK_THRESHOLD))
 SC_VARS <- "c_comp"     # O'Reilly-Murphy ISC. Alternative: "pca_comp" (r = 0.99999);
                         # never both in one specification (Eric, 19 Nov)
 GDP_SOURCE <- "rgdpe_pop"  # "rgdpe_pop" (PWT, Eric 20 Nov) | "gdppc" (panel column)
+
+# 5-yr GDP pc growth gaps left in the panel (Eric, 20 Nov: fill all of them).
+# Order used: (1) log difference within the panel, (2) the panel's own
+# gdppc_5growth (prior years Nishant filled), (3) PWT 11.0 rgdpe / pop five
+# years earlier, from Nishant's full-precision PWT file, (4) where PWT has no
+# earlier year (Hungary 1965; Estonia, Lithuania, Russia 1985): growth from
+# the Maddison Project file in Datawork~Nishant. Both files are read inside
+# their zip archives; nothing is extracted or written in Datawork~Nishant.
+# GROWTH_FILL = "pwt_maddison" (default) | "pwt" (PWT only) | "none".
+GROWTH_FILL      <- Sys.getenv("GROWTH_FILL", "pwt_maddison")
+PWT_ZIP          <- file.path(root, "Datawork~Nishant", "PWT csv.zip")
+PWT_ZIP_CSV      <- "pwt110 (2)-Data.csv"
+MADDISON_ZIP     <- file.path(root, "Datawork~Nishant",
+                              "gdp-per-capita-maddison-project-database.zip")
+MADDISON_ZIP_CSV <- "gdp-per-capita-maddison-project-database.csv"
 FERT_OPTION <- "F1"                 # F1 keep lagged fertility (decided 18 Nov)
 
 B_BOOT      <- as.integer(Sys.getenv("B_BOOT", "200"))
@@ -162,6 +182,38 @@ if (any(raw$year == 1965)) {
   cat("1965 rows found: used for the 1965-70 GDP pc growth covariate.\n")
 }
 
+# --- 5-yr GDP pc growth from outside the panel (see GROWTH_FILL) -----------
+# Panel country names that differ from PWT 11.0, mapped to ISO3 codes
+pwt_iso <- c("Bolivia" = "BOL", "Congo, Dem. Rep." = "COD", "Congo, Rep." = "COG",
+             "Cote d'Ivoire" = "CIV", "Czech Republic" = "CZE", "Hong Kong" = "HKG",
+             "Iran" = "IRN", "Laos" = "LAO", "Moldova" = "MDA", "Russia" = "RUS",
+             "South Korea" = "KOR", "Syria" = "SYR", "Tanzania" = "TZA",
+             "Turkey" = "TUR", "Venezuela" = "VEN", "Vietnam" = "VNM")
+growth_ext <- raw %>% distinct(country, year) %>%
+  mutate(g_pwt = NA_real_, g_mad = NA_real_)
+if (GROWTH_FILL %in% c("pwt", "pwt_maddison")) {
+  pwt <- read.csv(unz(PWT_ZIP, PWT_ZIP_CSV), check.names = FALSE,
+                  stringsAsFactors = FALSE, encoding = "UTF-8")
+  name_iso <- setNames(pwt$countrycode, pwt$country)
+  growth_ext$iso <- ifelse(growth_ext$country %in% names(pwt_iso),
+                           pwt_iso[growth_ext$country],
+                           name_iso[growth_ext$country])
+  log_gpc <- function(tab, iso, yr) tab$lgpc[match(paste(iso, yr),
+                                                   paste(tab$iso, tab$year))]
+  pwt_l <- pwt %>% transmute(iso = countrycode, year, lgpc = log(rgdpe / pop))
+  growth_ext$g_pwt <- log_gpc(pwt_l, growth_ext$iso, growth_ext$year) -
+                      log_gpc(pwt_l, growth_ext$iso, growth_ext$year - 5)
+  if (GROWTH_FILL == "pwt_maddison") {
+    mad <- read.csv(unz(MADDISON_ZIP, MADDISON_ZIP_CSV), check.names = FALSE,
+                    stringsAsFactors = FALSE)
+    mad_l <- data.frame(iso = mad$Code, year = mad$Year,
+                        lgpc = log(mad[["GDP per capita"]]))
+    growth_ext$g_mad <- log_gpc(mad_l, growth_ext$iso, growth_ext$year) -
+                        log_gpc(mad_l, growth_ext$iso, growth_ext$year - 5)
+  }
+  growth_ext$iso <- NULL
+}
+
 level_vars <- c("infantmortality", "IM_lower_bound", "IM_upper_bound",
                 "EFW", "EFW_rank", "gdppc", "gdppc_5growth_panel", "rgdpe", "pop", "hc", "fertilrate",
                 "oldagedep", "polity5", "urbanpop", SC_VARS)
@@ -174,6 +226,7 @@ panel <- raw %>%
   mutate(across(all_of(level_vars), ~ suppressWarnings(as.numeric(.)))) %>%
   # Complete grid, so lag() is always the previous grid point
   complete(country, year = grid_years) %>%
+  left_join(growth_ext, by = c("country", "year")) %>%
   arrange(country, year) %>%
   group_by(year) %>%
   mutate(
@@ -192,8 +245,17 @@ panel <- raw %>%
     window_next = lead(year) - year,      # 5 (4 for 2020-2024)
     # 5-yr growth: computed log difference where the panel has the previous
     # point; otherwise the panel's own value (prior years filled by Nishant)
+    # (PWT, then Maddison, fill what is still missing; see GROWTH_FILL)
+    growth_src = case_when(
+      !is.na((lngdppc - lag(lngdppc)) * 5 / window) ~ "panel log difference",
+      !is.na(gdppc_5growth_panel)                    ~ "panel gdppc_5growth",
+      !is.na(gdppc) & !is.na(g_pwt)                  ~ "PWT 11.0 (filled)",
+      !is.na(gdppc) & !is.na(g_mad)                  ~ "Maddison (filled)",
+      TRUE                                           ~ NA_character_),
     gdppc_5growth = coalesce((lngdppc - lag(lngdppc)) * 5 / window,
-                             gdppc_5growth_panel),
+                             gdppc_5growth_panel,
+                             if_else(is.na(gdppc), NA_real_, g_pwt),
+                             if_else(is.na(gdppc), NA_real_, g_mad)),
     # Data quality: width of the IGME 90% interval (deaths per 1,000)
     con_int = IM_upper_bound - IM_lower_bound,
     # Outcomes (C&Y timing: treatment over t-5..t, outcome over t..t+5)
@@ -224,6 +286,17 @@ for (v in SC_VARS) {
                                     FUN = function(x) dplyr::lag(x))
 }
 lag_sc <- paste0("lag_", SC_VARS)
+
+growth_filled <- panel %>%
+  filter(growth_src %in% c("PWT 11.0 (filled)", "Maddison (filled)")) %>%
+  transmute(country, year, gdppc_5growth = round(gdppc_5growth, 4),
+            source = growth_src)
+write.csv(growth_filled, file.path(tab_dir, "D4_growth_filled.csv"),
+          row.names = FALSE)
+cat(sprintf("5-yr GDP pc growth filled outside the panel: %d rows (%s)\n",
+            nrow(growth_filled),
+            paste(names(table(growth_filled$source)), table(growth_filled$source),
+                  collapse = ", ")))
 
 
 # =============================================================================

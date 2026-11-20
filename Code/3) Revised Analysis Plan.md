@@ -16,11 +16,18 @@ compiles through LaTeX.*
   where the previous 5-year point is not a panel row (Nishant filled 142 of
   them from PWT, listed in `Datawork~Nishant/gdp_growth_prior_rows.csv`).
   Where both points are panel rows, the script's own log difference is used;
-  the two agree exactly.
+  the two agree exactly. The 12 values still missing are filled in the
+  script (setting `GROWTH_FILL`, 20 Nov, Eric: "fill in any missing growth
+  gaps"): 8 from Nishant's full-precision PWT file
+  (`Datawork~Nishant/PWT csv.zip`) and 4 from the Maddison Project file in
+  the same folder (Hungary 1970; Estonia, Lithuania, Russia 1990), where
+  PWT has no earlier year. Each run lists them in
+  `tables/D4_growth_filled.csv`.
 - **More treatments in both directions.** With the IMR level outcome and
-  complete covariates, the 1970-2020 headline sample has 43 liberalizations
+  complete covariates, the 1970-2020 headline sample has 44 liberalizations
   (40 on `version16`) and 25 deliberalizations (12). With the 2024
-  extension: 43 and 26. The gain comes from the 1970-75 windows.
+  extension: 44 and 26. The gain comes from the 1970-75 windows and, after
+  the growth fill, Russia 1990-95.
 - **Outputs:** `Results/version18/headline_1970-2020/` and
   `Results/version18/appendix_1970-2024/`. The output folder is now named
   after the data file, so the `version16` results stay as they were.
@@ -134,7 +141,7 @@ over the same window as the EFW change (`change_IM`, `2) Analysis.R` line
 | Sample period | Headline 1970-2020; extension to 2024 in the appendix | Eric, 19 Nov |
 | Main regressor | Change in the EFW summary index; change in EFW rank as a separate analysis | Eric, 19 Nov |
 | Specification sequence | Naive, then + state capacity (`c_comp`), then + `con_int` (headline); `rp` dropped | Eric, 19 Nov |
-| GDP per capita | `gdppc` from Our World in Data, with 5-year growth (1965 values to be added); 2023 PWT values stand in for 2024 | Eric, 19 Nov |
+| GDP per capita | PWT 11.0 `rgdpe / pop` (`totalpop`, `totalGDP` dropped), with 5-year growth; 2023 PWT values stand in for 2024 | Eric, 20 Nov (replaces 19 Nov OWID) |
 | Regime type | Polity5 as a matching covariate (2018 values stand in for 2020) | Eric, 16-17 Nov |
 | Data quality | IGME 90% interval width, `con_int` = `IM_upper_bound` - `IM_lower_bound`, lagged. A control, never an outcome. `rp` dropped. | Vincent Notes; Eric, 18-19 Nov |
 | Method | PSM (NN3, kernel) and Mahalanobis NN3 | Eric, 18 Nov |
@@ -386,15 +393,22 @@ the 2015-20 window (outcome 2020-24) needs IMR for 2024 (present) and the
 
 - Fixed: `rgdpe`, `pop` and `hc` have decimals again (no `pop` = 0 rows),
   and 5-year growth is filled for 1970 and the other prior years on the
-  19 Nov list. All 1,486 rows round to the PWT 11.0 values in
-  `Downloaded Dataset.zip`. That PWT CSV is itself rounded to whole numbers,
-  so the decimals cannot be checked against it: to ask Nishant which PWT
-  file he used.
-- 12 rows still lack 5-year growth. Four cannot be filled because PWT has
-  no prior year (Hungary 1970; Estonia, Lithuania and Russia 1990). Eight
-  could be filled from PWT (Bahamas and Barbados 1975, Iceland, Luxembourg
-  and Malta 1970, Belize 1980, Kuwait 2020, Seychelles 2015); none of them
-  would bring back a treated episode.
+  19 Nov list. All `rgdpe`, `pop`, `hc` and growth values equal Nishant's
+  full-precision PWT file (`Datawork~Nishant/PWT csv.zip`) exactly.
+- 12 rows still lacked 5-year growth; the script now fills them (Section
+  0c). Only Russia 1990 changes the treated sample.
+- **158 country-years with an EFW rating and an IGME IMR estimate are not in
+  the panel** (92 in 51 panel countries, for example Kuwait 2000-2015,
+  Zimbabwe 1970-1990 and many 2000 rows; 66 in 12 countries absent
+  entirely, for example Bahrain, Belarus, Iraq). Inherited from
+  `merged.csv`. They hide up to 28 more treated windows (19 liberalizations,
+  9 deliberalizations). List for Nishant:
+  `reviews/version18_missing_efw_rows.csv` in the project files.
+- The panel's EFW is the 2026 file's "EFW Ratings" sheet; the "EFW Panel
+  Dataset" sheet's summary index differs (sd 0.32 points). To confirm which
+  series the paper uses.
+- The 2024 `gdppc_5growth` in the panel is a 3-year change (2020 to 2023
+  PWT). Not used in any matching.
 - Venezuela: PWT 11.0 `rgdpe` per capita falls from 18,518 (2010) to 5,488
   (2015) and 165 (2020). Outside the headline (covariates at $t-5$ end in
   2010) but inside the 2024 appendix.
@@ -479,22 +493,26 @@ Eric is still validating; see the data flags in the thread and Section 6b.
 ## 9c. Run on `Version18` (20 Nov)
 
 Results are in `Results/version18/headline_1970-2020/` and
-`Results/version18/appendix_1970-2024/` (43 liberalizations and 25
-deliberalizations in the headline sample). ATT on the IMR level at $t+5$,
-liberalizers, 1970-2020, bootstrap SE in parentheses:
+`Results/version18/appendix_1970-2024/`, rerun after the growth fill (44
+liberalizations and 25 deliberalizations in the headline sample). ATT on
+the IMR level at $t+5$, liberalizers, 1970-2020, bootstrap SE in
+parentheses:
 
 | Estimator | S1 naive | S2 + `c_comp` | S3 + `con_int` |
 |---|---|---|---|
-| PSM NN3, plain | -8.82 (6.71) | -7.72 (6.86) | -5.50 (6.49) |
-| PSM NN3, bias-adjusted | -3.38 (2.84) | -1.16 (3.03) | -2.23 (2.69) |
-| PSM kernel, plain | -3.54 (4.69) | -1.34 (5.00) | -1.57 (5.16) |
-| PSM kernel, bias-adjusted | -0.44 (2.36) | -0.56 (2.54) | -1.58 (2.45) |
-| Mahalanobis NN3 (bias-adjusted) | -1.78 (1.44) | -1.54 (1.54) | -0.51 (1.33) |
+| PSM NN3, plain | -6.09 (6.29) | -5.45 (6.41) | -1.83 (6.76) |
+| PSM NN3, bias-adjusted | -2.99 (2.65) | -0.73 (3.00) | -2.37 (2.60) |
+| PSM kernel, plain | -4.07 (4.94) | -2.19 (4.95) | -1.84 (5.37) |
+| PSM kernel, bias-adjusted | -0.47 (2.38) | -0.58 (2.60) | -1.15 (2.48) |
+| Mahalanobis NN3 (bias-adjusted) | -1.92 (1.43) | -1.46 (1.50) | -0.57 (1.30) |
 
-No matching estimate is significant at 5%, for liberalizers or for
-deliberalizers. The regression benchmark (T6, continuous EFW change, year
-fixed effects) gives about -2.5 deaths per 1,000 per EFW point at every
-step, significant at 5%, and is unchanged by `con_int`.
+No headline matching estimate is significant at 5%, for liberalizers or for
+deliberalizers (in the 2024 appendix, only Mahalanobis S1 is, -2.66, SE
+1.36). Adding one treated country moved plain NN3 S3 from -5.50 to -1.83;
+the bias-adjusted estimates moved by less than 0.5. The regression benchmark
+(T6, continuous EFW change, year fixed effects) gives about -2.4 to -2.5
+deaths per 1,000 per EFW point at every step, significant at 5%, and is
+unchanged by `con_int`.
 
 ## 10. Project workplan
 
@@ -512,7 +530,7 @@ step, significant at 5%, and is unchanged by `con_int`.
 
 | Item | What | Status (20 Nov) |
 |---|---|---|
-| 1 | Review and validate the updated panel once Nishant adds unrounded `rgdpe`, `pop` and `hc` and the missing prior-period GDP for 5-year growth (147 country-years listed in `version16_missing_prior_gdp.csv`) | Done on `Version18` (Section 6c). Open: Nishant's PWT source file, 8 fillable growth rows |
+| 1 | Review and validate the updated panel once Nishant adds unrounded `rgdpe`, `pop` and `hc` and the missing prior-period GDP for 5-year growth (147 country-years listed in `version16_missing_prior_gdp.csv`) | Done on `Version18` (Section 6c): PWT values confirmed exactly, growth gaps filled in the script. Open: 158 missing country-years, EFW series |
 | 2 | Specifications on the IMR level, with bias-adjusted PSM | Rerun on `Version18` (Section 9c) |
 | 2b | Bias adjustment in mathematical form, with an explanation, in its own markdown file | Draft: `Code/3) PSM Bias Adjustment.md` |
 | 3 | Liberalizers as the headline, deliberalizers in the appendix; possibly a combined-magnitude analysis of liberalizers and deliberalizers in the appendix | First part done (figures F1, F1b). Combined magnitude: open, to define with Eric |
