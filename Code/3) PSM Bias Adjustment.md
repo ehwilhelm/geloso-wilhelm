@@ -17,7 +17,7 @@ ten years later.
 
 Propensity score matching (PSM) matches on a single number, the estimated
 probability of treatment. Two countries with the same propensity score can
-still differ in their IMR at $t-5$, because that score blends IMR with ten
+still differ in their IMR at $t-5$, because that score blends IMR with the
 other covariates. Whatever IMR gap is left after matching passes almost one
 for one into a plain PSM estimate on the level outcome. That is why the plain
 PSM estimates jumped around and had standard errors of 4 to 7 deaths per

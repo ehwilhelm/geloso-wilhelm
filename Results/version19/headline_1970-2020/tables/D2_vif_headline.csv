@@ -1,12 +1,7 @@
 "variable","VIF"
-"lagEFW",3.1
-"laghc",6.2
-"laglngdppc",5.8
-"laggdpc_5growth",1.1
-"lagfertilrate",5.9
-"lagoldagedep",3.2
-"lagpolity5",2.4
-"lagurbanpop",3.5
-"lag_IM",8
-"lag_c_comp",4.3
+"lagEFW",2.8
+"laglngdppc",3.7
+"laghc",4.6
+"lag_IM",6.2
+"lag_c_comp",3.3
 "lag_con_int",3.7

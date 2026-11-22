@@ -24,11 +24,12 @@
 #                    Alternative: "IM_t", the level at the end of the window.
 #                    The earlier change outcomes stay available as settings:
 #                    "change_IM_post" (t..t+5) and "change_IM" (t-5..t).
-#   Covariates     : at t-5: EFW, hc, ln GDP pc, 5-yr GDP pc growth,
-#                    fertility, old-age dependency, Polity5, urbanization,
-#                    IMR. ln GDP pc squared dropped (Eric, 22 Nov). Lawson's
-#                    leaner set (EFW, ln GDP pc, hc) and leaving IMR at t-5
-#                    out are settings: COVARIATE_SET, MATCH_ON_IMR.
+#   Covariates     : at t-5 (Eric, 22 Nov): Lawson's set (EFW, ln GDP pc,
+#                    hc) plus IMR at t-5. Robustness (appendix): the
+#                    Callais & Young set without ln GDP pc squared (adds
+#                    5-yr GDP pc growth, fertility, old-age dependency,
+#                    Polity5, urbanization). Settings: COVARIATE_SET,
+#                    MATCH_ON_IMR.
 #   Estimators     : PSM NN3, PSM kernel (Epanechnikov), Mahalanobis NN3 (BA).
 #                    Each PSM estimator is also reported bias-adjusted (BA):
 #                    within the matched sample, a regression of the outcome
@@ -155,20 +156,20 @@ PWT_CSV      <- "pwt110 (2)-Data.csv"
 MADDISON_CSV <- "gdp-per-capita-maddison-project-database.csv"
 FERT_OPTION <- "F1"                 # F1 keep lagged fertility (decided 18 Nov)
 
-# Matching covariates, all at t-5 (Eric, 22 Nov: drop ln GDP pc squared; the
-# Kuznets-curve reason Callais & Young give for it concerns inequality, not
-# IMR). COVARIATE_SET:
-#   "cy"        Callais & Young (Section 4.3) without the square (default):
-#               EFW, hc, ln GDP pc, 5-yr GDP pc growth, fertility, old-age
-#               dependency, Polity5, urbanization
+# Matching covariates, all at t-5 (Eric, 22 Nov: drop ln GDP pc squared, whose
+# Kuznets-curve reason concerns inequality, not IMR; headline uses Lawson's
+# leaner set plus IMR at t-5). COVARIATE_SET:
 #   "lawson"    Lawson (Working Paper, Section 3): EFW, ln GDP pc, hc
-#   "cy_square" the set used until 22 Nov (adds ln GDP pc squared)
+#               (default, headline)
+#   "cy"        Callais & Young (Section 4.3) without the square: EFW, hc,
+#               ln GDP pc, 5-yr GDP pc growth, fertility, old-age
+#               dependency, Polity5, urbanization (appendix robustness)
 # MATCH_ON_IMR = TRUE (default): IMR at t-5, the outcome's level before the
 #   EFW window, is also matched on (Callais & Young match on the lagged
 #   outcome). FALSE: left out of the matching; the bias-adjusted PSM
 #   estimators still regress on it (BA_VAR) and then make the whole IMR(t-5)
 #   correction, and Mahalanobis (BA) no longer adjusts for it.
-COVARIATE_SET <- Sys.getenv("COVARIATE_SET", "cy")
+COVARIATE_SET <- Sys.getenv("COVARIATE_SET", "lawson")
 MATCH_ON_IMR  <- as.logical(Sys.getenv("MATCH_ON_IMR", "TRUE"))
 
 B_BOOT      <- as.integer(Sys.getenv("B_BOOT", "200"))
@@ -184,7 +185,7 @@ run_tag <- paste0(if (APPENDIX_2024) "appendix_1970-2024" else "headline_1970-20
                   if (OUTCOME == "IM_post") "" else paste0("_", OUTCOME),
                   if (TREAT_SCALE == "rank") "_rank" else "",
                   if (STRICT_THRESHOLD) "" else "_ge1",
-                  if (COVARIATE_SET == "cy") "" else paste0("_cov-", COVARIATE_SET),
+                  if (COVARIATE_SET == "lawson") "" else paste0("_cov-", COVARIATE_SET),
                   if (MATCH_ON_IMR) "" else "_noIMR")
 
 # Labels that follow the outcome
@@ -297,7 +298,6 @@ panel <- raw %>%
     gdppc   = if (GDP_SOURCE == "rgdpe_pop") if_else(pop > 0, rgdpe / pop, NA_real_)
               else gdppc,
     lngdppc = log(gdppc),
-    lngdppc2 = lngdppc^2,
     window      = year - lag(year),       # 5 (4 for 2020-2024)
     window_next = lead(year) - year,      # 5 (4 for 2020-2024)
     # 5-yr growth: computed log difference where the panel has the previous
@@ -327,7 +327,6 @@ panel <- raw %>%
     lagEFW          = lag(EFW),
     laghc           = lag(hc),
     laglngdppc      = lag(lngdppc),
-    laglngdppc2     = lag(lngdppc2),
     laggdpc_5growth = lag(gdppc_5growth),
     lagfertilrate   = lag(fertilrate),
     lagoldagedep    = lag(oldagedep),
@@ -406,10 +405,9 @@ write.csv(episodes, file.path(tab_dir, "T1_episodes.csv"), row.names = FALSE)
 cy_covars <- c("lagEFW", "laghc", "laglngdppc", "laggdpc_5growth",
                "lagfertilrate", "lagoldagedep", "lagpolity5", "lagurbanpop")
 base_covars <- switch(COVARIATE_SET,
-  cy        = cy_covars,
-  lawson    = c("lagEFW", "laglngdppc", "laghc"),
-  cy_square = append(cy_covars, "laglngdppc2", after = 4),
-  stop("COVARIATE_SET must be cy, lawson or cy_square"))
+  lawson = c("lagEFW", "laglngdppc", "laghc"),
+  cy     = cy_covars,
+  stop("COVARIATE_SET must be lawson or cy"))
 if (MATCH_ON_IMR) base_covars <- c(base_covars, "lag_IM")
 
 specs <- list(
