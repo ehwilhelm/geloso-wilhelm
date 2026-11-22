@@ -454,8 +454,12 @@ att_nn3 <- function(df, treatment, ps, y = OUTCOME, ba = FALSE) {
   # and its index.treated / index.control refer to the TRIMMED data. Keep the
   # map back to rows of df (needed for balance tables).
   tr <- df[[treatment]] == 1
+  # Same rule as Match(): bounds widened by its distance.tolerance (1e-05).
+  # (Until 22 Nov the tolerance was left out, which misaligned the map when a
+  # score sat within 1e-05 of a bound; this only affected NN3 balance tables.)
   lo <- max(min(ps[tr]), min(ps[!tr])); hi <- min(max(ps[tr]), max(ps[!tr]))
-  m$rows <- which(ps >= lo & ps <= hi)
+  m$rows <- which(ps >= lo - 1e-05 & ps <= hi + 1e-05)
+  stopifnot(length(m$rows) == m$orig.nobs)
   list(att = as.numeric(m$est), m = m)
 }
 
@@ -840,6 +844,177 @@ ggsave(file.path(fig_dir, "F3_headline_contrast.png"), f3, width = 9, height = 4
 
 
 # =============================================================================
+# Part 9b: Chi-squared balance tests and propensity score overlap (22 Nov)
+# =============================================================================
+# Balance test as in Callais & Young's Stata code (psmatch2, then
+# "pstest ..., both"; Sianesi 2004). The propensity-score logit of each spec
+# is re-estimated (a) on the full sample and (b) on the matched sample, with
+# treated units weighted 1 and controls by their matching weights. The
+# likelihood-ratio chi-squared (df = number of covariates) tests that all
+# covariate coefficients are zero. After matching, a high p-value means the
+# covariates no longer tell treated units from their matches, i.e. balance.
+# Also as in pstest: pseudo R2; mean and median absolute standardized % bias
+# (difference in means over the root mean of the two unmatched-sample
+# variances); Rubin's B (standardized % difference in the linear propensity
+# index) and R (ratio of its treated to control variance). Rubin (2001):
+# B < 25 and R between 0.5 and 2. Mahalanobis matching is tested the same way
+# (Stata offers the test for PSM only).
+# Outputs: T8_balance_chi2.csv (one row per pair, spec, matching method),
+# T8b_balance_by_covariate.csv, F4/F4b (propensity score overlap).
+
+# Weight of each row of df in a matched sample: treated 1 if matched,
+# controls the sum of their matching weights (each treated spreads weight 1
+# over its matches), everything else 0
+w_from_match <- function(df, m) {
+  w <- numeric(nrow(df))
+  if (is.null(m)) return(NULL)
+  rows <- if (!is.null(m$rows)) m$rows else seq_len(nrow(df))
+  w[unique(rows[m$index.treated])] <- 1
+  wc <- tapply(m$weights, rows[m$index.control], sum)
+  w[as.integer(names(wc))] <- w[as.integer(names(wc))] + wc
+  w
+}
+w_kernel <- function(ps, tr) {
+  ps_c <- ps[!tr]
+  W <- t(vapply(ps[tr], function(p) {
+    u <- (ps_c - p) / kernel_bw
+    k <- ifelse(abs(u) < 1, 0.75 * (1 - u^2), 0)
+    if (sum(k) == 0) rep(NA_real_, length(k)) else k / sum(k)
+  }, numeric(length(ps_c))))
+  ok <- ps[tr] >= min(ps_c) & ps[tr] <= max(ps_c) & !is.na(W[, 1])
+  w <- numeric(length(ps))
+  w[which(tr)[ok]] <- 1
+  w[which(!tr)] <- colSums(W[ok, , drop = FALSE])
+  w
+}
+
+wmean <- function(x, w) sum(w * x) / sum(w)
+wvar  <- function(x, w) sum(w * (x - wmean(x, w))^2) / sum(w)
+logit_ll <- function(D, X, w) {
+  keep <- w > 0
+  fit <- suppressWarnings(glm.fit(cbind(1, X[keep, , drop = FALSE]), D[keep],
+                                  weights = w[keep], family = binomial()))
+  p <- pmin(pmax(fit$fitted.values, 1e-12), 1 - 1e-12)
+  p0 <- wmean(D[keep], w[keep])
+  c(ll1 = sum(w[keep] * (D[keep] * log(p) + (1 - D[keep]) * log(1 - p))),
+    ll0 = sum(w[keep] * (D[keep] * log(p0) + (1 - D[keep]) * log(1 - p0))))
+}
+
+pstest <- function(df, treatment, covars, w, xb) {
+  D  <- as.numeric(df[[treatment]] == 1); tr <- D == 1
+  X  <- as.matrix(df[, covars])
+  ll <- logit_ll(D, X, w)
+  lr <- 2 * (ll[["ll1"]] - ll[["ll0"]])
+  sd_pool <- sqrt((apply(X[tr, , drop = FALSE], 2, var) +
+                   apply(X[!tr, , drop = FALSE], 2, var)) / 2)
+  wt <- w * tr; wc <- w * !tr
+  bias <- 100 * (apply(X, 2, wmean, w = wt) - apply(X, 2, wmean, w = wc)) / sd_pool
+  t_p <- sapply(covars, function(v) {
+    keep <- w > 0
+    co <- summary(lm(X[keep, v] ~ D[keep], weights = w[keep]))$coefficients
+    if (nrow(co) < 2) NA_real_ else co[2, 4]
+  })
+  list(summary = data.frame(
+         n_treated = sum(wt > 0), n_controls = sum(wc > 0),
+         LR_chi2 = lr, df = length(covars),
+         p_value = pchisq(lr, length(covars), lower.tail = FALSE),
+         pseudo_R2 = 1 - ll[["ll1"]] / ll[["ll0"]],
+         mean_abs_bias = mean(abs(bias)), median_abs_bias = median(abs(bias)),
+         rubin_B = 100 * abs(wmean(xb, wt) - wmean(xb, wc)) /
+                   sqrt((wvar(xb, wt) + wvar(xb, wc)) / 2),
+         rubin_R = wvar(xb, wt) / wvar(xb, wc)),
+       by_cov = data.frame(variable = covars,
+                           mean_treated = apply(X, 2, wmean, w = wt),
+                           mean_control = apply(X, 2, wmean, w = wc),
+                           pct_bias = bias, t_test_p = t_p, row.names = NULL))
+}
+
+bal_chi2 <- list(); bal_cov <- list(); ps_long <- list()
+for (p in names(res_main)) {
+  r <- res_main[[p]]
+  if (is.null(r)) next
+  df <- r$df; tr <- df[[r$treatment]] == 1
+  for (s in names(specs)) {
+    cv  <- specs[[s]]
+    fit <- glm(as.formula(paste(r$treatment, "~", paste(cv, collapse = " + "))),
+               data = df, family = binomial(link = "logit"))
+    ps  <- suppressWarnings(fitted(fit)); xb <- predict(fit, type = "link")
+    ws  <- list("Unmatched"   = rep(1, nrow(df)),
+                "PSM NN3"     = w_from_match(df, r$est[[s]]$nn3_match),
+                "PSM Kernel"  = w_kernel(ps, tr),
+                "Mahalanobis" = w_from_match(df, r$est[[s]]$mah$m))
+    for (k in names(ws)) {
+      if (is.null(ws[[k]])) next
+      pt <- pstest(df, r$treatment, cv, ws[[k]], xb)
+      bal_chi2[[length(bal_chi2) + 1]] <- data.frame(pair = p, spec = s, sample = k, pt$summary)
+      bal_cov[[length(bal_cov) + 1]]   <- data.frame(pair = p, spec = s, sample = k, pt$by_cov)
+      if (k != "Mahalanobis")
+        ps_long[[length(ps_long) + 1]] <- data.frame(pair = p, spec = s, sample = k,
+                                                     ps = ps, treated = tr, w = ws[[k]])
+    }
+  }
+}
+bal_chi2 <- do.call(rbind, bal_chi2); bal_cov <- do.call(rbind, bal_cov)
+ps_long  <- do.call(rbind, ps_long)
+write.csv(bal_chi2, file.path(tab_dir, "T8_balance_chi2.csv"), row.names = FALSE)
+write.csv(bal_cov, file.path(tab_dir, "T8b_balance_by_covariate.csv"), row.names = FALSE)
+
+# Propensity score overlap: mirrored histograms, treated above the axis and
+# controls below, each as a share of its (weighted) group. Columns: before
+# matching (all controls), after PSM NN3 and after PSM kernel (matched
+# controls, weighted by their matching weights). Rows: S1-S3.
+ps_bw <- 0.02
+overlap_fig <- function(pr, file) {
+  d <- ps_long %>% filter(pair == pr, w > 0) %>%
+    mutate(bin = (floor(ps / ps_bw) + 0.5) * ps_bw,
+           group = if_else(treated, "Treated", "Controls (matched, weighted)")) %>%
+    mutate(group = if_else(!treated & sample == "Unmatched", "Controls (all)", group)) %>%
+    group_by(spec, sample, treated) %>% mutate(share = w / sum(w)) %>%
+    group_by(spec, sample, treated, bin) %>%
+    summarise(share = sum(share), .groups = "drop") %>%
+    mutate(share = if_else(treated, share, -share),
+           who = if_else(treated, "Treated", "Comparison group"),
+           sample = factor(sample, levels = c("Unmatched", "PSM NN3", "PSM Kernel"),
+                           labels = c("Before matching (all controls)",
+                                      "After PSM NN3 (matched controls)",
+                                      "After PSM kernel (matched controls)")),
+           spec = factor(spec, levels = names(spec_labels), labels = spec_labels))
+  tst <- bal_chi2 %>% filter(pair == pr, sample != "Mahalanobis") %>%
+    mutate(sample = factor(sample, levels = c("Unmatched", "PSM NN3", "PSM Kernel"),
+                           labels = levels(d$sample)),
+           spec = factor(spec, levels = names(spec_labels), labels = spec_labels),
+           lab = sprintf("%d treated, %d controls\nLR chi2(%d) = %.1f, p = %.2f\nB = %.0f, R = %.2f",
+                         n_treated, n_controls, df, LR_chi2, p_value, rubin_B, rubin_R))
+  ymax <- max(abs(d$share))
+  f <- ggplot(d, aes(bin, share, fill = who)) +
+    geom_col(width = ps_bw * 0.85) +
+    geom_hline(yintercept = 0, colour = "grey30", linewidth = 0.3) +
+    geom_text(data = tst, aes(x = Inf, y = ymax, label = lab), inherit.aes = FALSE,
+              hjust = 1.05, vjust = 1, size = 2.9, colour = "grey25", lineheight = 0.95) +
+    facet_grid(spec ~ sample, labeller = label_wrap_gen(width = 30)) +
+    scale_fill_manual(values = c("Treated" = "#e8613a", "Comparison group" = "#2a6fdb"),
+                      breaks = c("Treated", "Comparison group"), name = NULL) +
+    scale_y_continuous(labels = function(x) scales::percent(abs(x), accuracy = 1)) +
+    labs(title = paste("Propensity score overlap:", tolower(side_names[pr])),
+         subtitle = paste0("Treated above the axis, comparison group below; each as a share of its group (",
+                           "matched controls weighted by their matching weights).\n",
+                           "Balance test after psmatch2/pstest: LR chi2 that the covariates jointly ",
+                           "predict treatment (high p = balanced). B and R: Rubin (2001), ",
+                           "aim for B < 25 and 0.5 < R < 2.\n",
+                           "PSM NN3 uses only treated units with a match inside the caliper ",
+                           "(0.25 SD of the score); kernel only those on the common support."),
+         x = "Propensity score", y = "Share of group") +
+    theme_minimal(base_size = 10) +
+    theme(legend.position = "bottom", panel.grid.minor = element_blank(),
+          strip.text = element_text(face = "bold"),
+          plot.subtitle = element_text(size = 8.5, colour = "grey30"))
+  ggsave(file.path(fig_dir, file), f, width = 11, height = 8.5, dpi = 200)
+}
+overlap_fig("A", "F4_ps_overlap_liberalizers.png")
+overlap_fig("C", "F4b_ps_overlap_deliberalizers.png")
+
+
+# =============================================================================
 # Part 10: Robustness hooks (plan section 8; change a setting and rerun)
 # =============================================================================
 # Appendix 2024 : Sys.setenv(APPENDIX_2024 = "TRUE") and rerun
@@ -848,6 +1023,7 @@ ggsave(file.path(fig_dir, "F3_headline_contrast.png"), f3, width = 9, height = 4
 
 saveRDS(list(panel = panel, main = res_main,
              att = att_main, contrasts = con_main, balance = bal_main,
+             balance_chi2 = bal_chi2,
              lib_delib = lib_delib_tab, regressions = reg_tab,
              settings = list(DATA_FILE = DATA_FILE, OUTCOME = OUTCOME,
                              APPENDIX_2024 = APPENDIX_2024, THRESHOLD = THRESHOLD,

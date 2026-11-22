@@ -6,6 +6,66 @@ November 2026, 20 November 2026 for `Version18` and 22 November 2026 for
 now reads `Datawork~Nishant/Version19.csv` and runs end to end. Plain ASCII
 so it compiles through LaTeX.*
 
+## 0g. Chi-squared balance tests and propensity score overlap (22 Nov)
+
+Eric (22 Nov): chi-squared balance test diagnostics, and a picture of how
+the propensity scores of treated and matched controls overlap.
+
+**Test.** The one Callais & Young run in their Stata code (`psmatch2`, then
+`pstest ..., both`; Sianesi 2004): the propensity-score logit of each
+specification is re-estimated on the full sample and on the matched sample
+(treated weighted 1, controls by their matching weights). The
+likelihood-ratio chi-squared, with one degree of freedom per covariate,
+tests that the covariates jointly predict treatment; after matching, a high
+p-value means treated units and their matches are balanced. Also reported:
+pseudo R2, mean absolute standardized bias, and Rubin's B (standardized
+difference in the linear propensity index; aim for B < 25) and R (variance
+ratio of that index; aim for 0.5 to 2). Mahalanobis matching is tested the
+same way, although Stata offers the test for PSM only.
+
+**Files.** `tables/T8_balance_chi2.csv` (one row per pair, specification
+and matching method), `tables/T8b_balance_by_covariate.csv` (means, % bias
+and weighted t-test per covariate), `figures/F4_ps_overlap_liberalizers.png`
+and `figures/F4b_ps_overlap_deliberalizers.png`, in every run folder.
+
+Liberalizers, headline sample, S3 (headline specification):
+
+| Sample | Treated | Controls | LR chi2(6) | p | Mean abs. bias (%) | B | R |
+|---|---|---|---|---|---|---|---|
+| Before matching | 55 | 799 | 103.3 | 0.000 | 42.2 | 164 | 0.80 |
+| PSM NN3 | 49 | 125 | 0.4 | 1.00 | 2.5 | 0 | 1.01 |
+| PSM kernel | 53 | 796 | 1.0 | 0.98 | 4.1 | 17 | 0.65 |
+| Mahalanobis | 55 | 121 | 6.0 | 0.42 | 15.5 | 42 | 1.06 |
+
+- Before matching, the covariates predict liberalization strongly (p <
+  0.001 in every specification, B 155 to 164): the raw comparison group is
+  not comparable.
+- After matching, joint balance is not rejected for any estimator or
+  specification: p = 0.84 to 1.00 for PSM, 0.42 to 0.75 for Mahalanobis.
+  Callais & Young report chi-squared values of about 1 to 5 (p 0.92 to
+  1.00) for their PSM matches; ours are in the same range.
+- PSM NN3 keeps 48 to 50 of the 55 liberalizers: the others have no control
+  within the caliper (0.25 SD of the score), mostly scores above 0.5. Kernel
+  keeps 52 to 53.
+- Mahalanobis matches the covariates themselves, not the score, so B is
+  above 25 (26 to 42), and lagged EFW is the covariate left least balanced
+  (-35% bias in S3, t-test p = 0.004). Its bias adjustment regresses on all
+  matching covariates, which is what corrects for that gap.
+- Deliberalizers: joint balance not rejected anywhere (p 0.65 to 1.00), but
+  with 27 to 33 matched deliberalizers the test has little power; PSM NN3
+  in S2 and S3 still shows a mean absolute bias of 17 to 29%.
+- Robustness set (Callais & Young without the square): PSM p >= 0.94, but
+  Mahalanobis in 11 dimensions balances less well (S3: p = 0.09, B = 81),
+  in line with the overfitting point in Section 0f.
+- 2024 appendix: the same picture (PSM p >= 0.81, Mahalanobis p >= 0.40).
+
+**Fix made along the way.** The NN3 rows of the balance table T5 map the
+matched units back to the data after `Match()` trims to the common support.
+That map left out `Match()`'s distance tolerance (1e-05), so it was off
+whenever a score sat within 1e-05 of a bound (for example deliberalizers in
+the 2024 appendix). It now uses the same rule as `Match()` and checks the
+row count. Only the NN3 columns of T5 changed; no estimate changed.
+
 ## 0f. Matching covariates revisited (22 Nov, afternoon)
 
 Eric (22 Nov): the covariate set may overfit or include covariates that do
