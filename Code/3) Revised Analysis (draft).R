@@ -24,9 +24,11 @@
 #                    Alternative: "IM_t", the level at the end of the window.
 #                    The earlier change outcomes stay available as settings:
 #                    "change_IM_post" (t..t+5) and "change_IM" (t-5..t).
-#   Covariates     : at t-5, same set as before (EFW, hc, ln GDP pc and its
-#                    square, 5-yr GDP pc growth, fertility, old-age
-#                    dependency, Polity5, urbanization, IMR).
+#   Covariates     : at t-5: EFW, hc, ln GDP pc, 5-yr GDP pc growth,
+#                    fertility, old-age dependency, Polity5, urbanization,
+#                    IMR. ln GDP pc squared dropped (Eric, 22 Nov). Lawson's
+#                    leaner set (EFW, ln GDP pc, hc) and leaving IMR at t-5
+#                    out are settings: COVARIATE_SET, MATCH_ON_IMR.
 #   Estimators     : PSM NN3, PSM kernel (Epanechnikov), Mahalanobis NN3 (BA).
 #                    Each PSM estimator is also reported bias-adjusted (BA):
 #                    within the matched sample, a regression of the outcome
@@ -153,6 +155,22 @@ PWT_CSV      <- "pwt110 (2)-Data.csv"
 MADDISON_CSV <- "gdp-per-capita-maddison-project-database.csv"
 FERT_OPTION <- "F1"                 # F1 keep lagged fertility (decided 18 Nov)
 
+# Matching covariates, all at t-5 (Eric, 22 Nov: drop ln GDP pc squared; the
+# Kuznets-curve reason Callais & Young give for it concerns inequality, not
+# IMR). COVARIATE_SET:
+#   "cy"        Callais & Young (Section 4.3) without the square (default):
+#               EFW, hc, ln GDP pc, 5-yr GDP pc growth, fertility, old-age
+#               dependency, Polity5, urbanization
+#   "lawson"    Lawson (Working Paper, Section 3): EFW, ln GDP pc, hc
+#   "cy_square" the set used until 22 Nov (adds ln GDP pc squared)
+# MATCH_ON_IMR = TRUE (default): IMR at t-5, the outcome's level before the
+#   EFW window, is also matched on (Callais & Young match on the lagged
+#   outcome). FALSE: left out of the matching; the bias-adjusted PSM
+#   estimators still regress on it (BA_VAR) and then make the whole IMR(t-5)
+#   correction, and Mahalanobis (BA) no longer adjusts for it.
+COVARIATE_SET <- Sys.getenv("COVARIATE_SET", "cy")
+MATCH_ON_IMR  <- as.logical(Sys.getenv("MATCH_ON_IMR", "TRUE"))
+
 B_BOOT      <- as.integer(Sys.getenv("B_BOOT", "200"))
 SEED        <- 50826
 psm_caliper <- 0.25
@@ -165,7 +183,9 @@ grid_years <- c(seq(1970, 2020, 5), if (APPENDIX_2024) 2024)
 run_tag <- paste0(if (APPENDIX_2024) "appendix_1970-2024" else "headline_1970-2020",
                   if (OUTCOME == "IM_post") "" else paste0("_", OUTCOME),
                   if (TREAT_SCALE == "rank") "_rank" else "",
-                  if (STRICT_THRESHOLD) "" else "_ge1")
+                  if (STRICT_THRESHOLD) "" else "_ge1",
+                  if (COVARIATE_SET == "cy") "" else paste0("_cov-", COVARIATE_SET),
+                  if (MATCH_ON_IMR) "" else "_noIMR")
 
 # Labels that follow the outcome
 out_lab <- switch(OUTCOME,
@@ -383,9 +403,14 @@ write.csv(episodes, file.path(tab_dir, "T1_episodes.csv"), row.names = FALSE)
 # Part 3: Covariates and specification sequence
 # =============================================================================
 
-base_covars <- c("lagEFW", "laghc", "laglngdppc", "laggdpc_5growth",
-                 "laglngdppc2", "lagfertilrate", "lagoldagedep", "lagpolity5",
-                 "lagurbanpop", "lag_IM")
+cy_covars <- c("lagEFW", "laghc", "laglngdppc", "laggdpc_5growth",
+               "lagfertilrate", "lagoldagedep", "lagpolity5", "lagurbanpop")
+base_covars <- switch(COVARIATE_SET,
+  cy        = cy_covars,
+  lawson    = c("lagEFW", "laglngdppc", "laghc"),
+  cy_square = append(cy_covars, "laglngdppc2", after = 4),
+  stop("COVARIATE_SET must be cy, lawson or cy_square"))
+if (MATCH_ON_IMR) base_covars <- c(base_covars, "lag_IM")
 
 specs <- list(
   S1 = base_covars,                                 # naive
@@ -476,9 +501,9 @@ att_mah <- function(df, treatment, covars, y = OUTCOME) {
 }
 
 # One common sample per pair: complete on all outcomes and every covariate
-# of every spec, so S1-S3 differ only in the covariates.
+# of every spec (and on BA_VAR), so S1-S3 differ only in the covariates.
 test_sample <- function(data, treatment, control_filter = NULL) {
-  need <- c(OUTCOME, all_covars)
+  need <- c(OUTCOME, all_covars, BA_VAR)
   ok <- complete.cases(as.data.frame(data)[, unique(need)])
   df <- as.data.frame(data[ok, ])
   df <- df[!is.na(df[[treatment]]), ]
@@ -672,7 +697,7 @@ contrast_table <- function(results) {
 }
 
 balance_table <- function(results) {
-  bal_vars <- c(lag_sc, "lag_con_int", "lag_IM", "lagfertilrate", "lagpolity5")
+  bal_vars <- unique(c(lag_sc, "lag_con_int", "lag_IM", base_covars))
   do.call(rbind, lapply(names(results), function(p) {
     r <- results[[p]]
     if (is.null(r)) return(NULL)

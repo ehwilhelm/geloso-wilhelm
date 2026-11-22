@@ -6,6 +6,100 @@ November 2026, 20 November 2026 for `Version18` and 22 November 2026 for
 now reads `Datawork~Nishant/Version19.csv` and runs end to end. Plain ASCII
 so it compiles through LaTeX.*
 
+## 0f. Matching covariates revisited (22 Nov, afternoon)
+
+Eric (22 Nov): the covariate set may overfit or include covariates that do
+not matter for EFW jumps and IMR. Drop ln GDP per capita squared (the
+Kuznets-curve reason Callais & Young give is about inequality). Consider
+dropping IMR at $t-5$, since IMR is the outcome. Lawson (Working Paper,
+Section 3) matches on income, human capital and lagged EFW only.
+
+**Done:** ln GDP per capita squared is out of every specification (script
+default `COVARIATE_SET = "cy"`). Two settings test the rest:
+`COVARIATE_SET = "lawson"` (lagged EFW, ln GDP per capita, human capital)
+and `MATCH_ON_IMR = FALSE` (IMR at $t-5$ left out of the matching).
+`Results/version19/` now holds the run without the square. Every variant
+below is in `Results/version19/covariate_sets_headline_1970-2020.csv`.
+
+**What the two papers do.**
+
+- Callais & Young (2023, Section 4.3) choose covariates that (i) predict
+  the treatment, (ii) predict the outcome, or both. They use ln GDP per
+  capita, its square ("Kuznets effects"), 5-year growth, human capital,
+  Polity2, fertility, urbanization and old-age dependency, plus lagged EFW
+  and "the lagged value of the respective outcome variable", all at $t-5$.
+- Lawson (Section 3) computes the propensity score from income, human
+  capital and EFW lagged one year. (An earlier paragraph of the same
+  section also lists population, employment and three UN population-policy
+  variables.) The lagged outcome is not matched on. For infant mortality
+  (Table 8) her ATTs are -26 to -75 deaths per 1,000, about one standard
+  deviation of IMR, and the chi-squared test rejects covariate balance in
+  every PSM specification.
+
+**Why IMR at $t-5$ is in the matching set.** It is not the outcome. The
+outcome is IMR at $t+5$; IMR at $t-5$ is measured before the EFW window
+opens, so the treatment cannot affect it. It is the lagged outcome that
+Callais & Young match on. With the outcome in levels it is the covariate
+that matters most: in the headline sample the correlation between IMR at
+$t+5$ and IMR at $t-5$ is 0.96, and a country that starts 10 deaths per
+1,000 higher is still about 8 higher ten years later. It does not predict
+who liberalizes (p = 0.82 in the selection logit, table D3), so it qualifies
+under criterion (ii), the outcome.
+
+**What dropping it does** (Version19, headline liberalizers):
+
+- Without IMR in the matching, the matched groups start from different IMR
+  levels. With the Lawson set, the NN3-matched controls' IMR at $t-5$ is 0.40
+  and 0.58 standard deviations above the liberalizers' in S1 and S2 (0.00 to
+  0.15 when IMR is matched on), and plain PSM reports that gap as an effect:
+  NN3 -14.7 and -17.0, both significant. The deliberalizers show the mirror
+  image: +15 to +18 in S1 and S2, significant, for NN3, kernel and
+  Mahalanobis. This is the pattern in Lawson's Table 8.
+- The bias-adjusted PSM estimators barely move, because the bias adjustment
+  regresses the outcome on IMR at $t-5$ within the matched sample and so
+  removes the leftover gap after matching. Dropping IMR from the matching
+  moves the whole IMR correction into that linear regression: the same
+  control, but more dependent on the regression being right. Dropping IMR
+  from the bias adjustment as well would leave plain PSM on the IMR level,
+  which compares countries at different starting points.
+- Mahalanobis (BA) adjusts only on its matching covariates, so without IMR
+  it no longer corrects for it at all.
+
+**Overfitting.** The concern is fair. With the Callais & Young set, the S3
+logit has 11 covariates for 53 liberalizations (about 5 treated per
+covariate; 2.7 for the 30 deliberalizations). Mahalanobis matching in 11
+dimensions leaves lagged EFW, by far the strongest predictor of treatment
+(z = -7), poorly matched: standardized difference -0.51 to -0.67 after
+matching. The Lawson set plus IMR has 6 covariates in S3 (about 9 treated
+per covariate), lagged EFW differs by -0.19 to -0.43 after Mahalanobis
+matching, and the sample gains 2 liberalizations and 3 deliberalizations
+(55 and 33) because missing Polity5 and growth values no longer drop rows.
+
+ATT on the IMR level at $t+5$, liberalizers, 1970-2020, S1 / S2 / S3
+(* = p < 0.05):
+
+| Covariate set | Treated | PSM NN3 plain | PSM NN3 BA | PSM kernel BA | Mahalanobis (BA) |
+|---|---|---|---|---|---|
+| C&Y with square (until 22 Nov) | 53 | -5.84 / -5.55 / -2.88 | -2.01 / -2.32 / -0.78 | -2.76 / -1.90 / -1.18 | -2.66 / -2.28 / -1.19 |
+| C&Y without square (default now) | 53 | -10.84* / -7.67 / -1.89 | -3.79 / -2.65 / 0.02 | -3.19 / -1.76 / -1.40 | -3.03* / -3.41* / -1.57 |
+| C&Y without square, no IMR | 53 | -7.88 / -1.20 / -6.57 | -2.50 / -2.72 / -0.53 | -3.14 / -2.51 / -1.06 | -2.61 / -1.09 / 0.43 |
+| Lawson plus IMR | 55 | -5.00 / -5.20 / -0.25 | -3.61 / -2.12 / -0.33 | -3.13* / -2.94* / -1.70 | -3.08* / -1.86 / -1.77 |
+| Lawson, no IMR | 55 | -14.67* / -16.96* / -5.82 | -3.47 / -2.06 / -1.24 | -2.94* / -2.94* / -1.43 | -2.77 / -0.85 / -1.56 |
+
+No S3 (headline, with `con_int`) estimate is significant in any set. With
+the Lawson set plus IMR, every estimate moves toward zero when `con_int` is
+added. In the 2024 appendix (55 and 34 treated with the Lawson set) the
+pattern is the same: Mahalanobis -3.47* / -2.31 / -1.36, kernel BA -3.38* /
+-3.14* / -1.96.
+
+**Recommendation:** Lawson's three covariates (lagged EFW, ln GDP per
+capita, human capital) plus IMR at $t-5$, then + `c_comp` (S2) and +
+`con_int` (S3). Keep the Callais & Young set without the square as an
+appendix robustness check: 5-year growth and old-age dependency do predict
+liberalization in the selection logit (p = 0.01), so it is worth showing
+that the result does not depend on leaving them out. Awaiting Eric's
+choice.
+
 ## 0e. Data updated to Nishant's `Version19` (22 Nov)
 
 - **Data:** `Datawork~Nishant/Version19.csv` (Nishant, 22 Nov), chosen by
@@ -207,6 +301,7 @@ over the same window as the EFW change (`change_IM`, `2) Analysis.R` line
 | Method | PSM (NN3, kernel) and Mahalanobis NN3 | Eric, 18 Nov |
 | Pre/post measurement-error decomposition | Appendix | Eric and Vincent, 18 Nov |
 | Fertility rate | Kept as a lagged covariate (F1); no further changes | Eric, 18 Nov |
+| Matching covariates | ln GDP per capita squared dropped. Lawson set (lagged EFW, ln GDP pc, human capital) plus IMR at $t-5$ recommended; awaiting Eric (Section 0f) | Eric, 22 Nov |
 | Panel | Nishant's `Version19.csv` (replaces `Data/Version18_updated.csv`) | Eric, 22 Nov |
 | Jump threshold | **Strictly more than 1 point** in either direction, as in the literature (replaces the 18 Nov choice of 1 point or more). On `Version18` this drops one liberalization (Congo, Rep. 1990-95, +1.00) and no deliberalizations. Script setting `STRICT_THRESHOLD` | Eric, 20 Nov |
 
@@ -222,9 +317,10 @@ over the same window as the EFW change (`change_IM`, `2) Analysis.R` line
   deaths per 1,000 live births five years after the EFW window. Alternative:
   the level at the end of the window, $Y_{it}$. The change outcomes used
   until 19 Nov ($Y_{i,t+5} - Y_{i,t}$ and $Y_{it} - Y_{i,t-5}$) are retired.
-- **Baseline covariates, all at $t-5$:** EFW, human capital, ln GDP per capita
-  and its square, 5-year GDP growth, fertility rate (see Section 5), old-age
-  dependency, Polity5, urbanization and IMR.
+- **Baseline covariates, all at $t-5$:** EFW, human capital, ln GDP per capita,
+  5-year GDP growth, fertility rate (see Section 5), old-age dependency,
+  Polity5, urbanization and IMR. ln GDP per capita squared dropped 22 Nov;
+  Lawson's leaner set is under review (Section 0f).
 - **State capacity:** O'Reilly-Murphy `c_comp` at $t-5$ (Eric, 19 Nov).
   `pca_comp` correlates with it at 0.99999, so it is only an alternative
   (`SC_VARS`), never added alongside it.
@@ -286,8 +382,8 @@ X_i^{(S2)} = (B_{i,t-5}, SC_{i,t-5}), \qquad
 X_i^{(S3)} = (B_{i,t-5}, SC_{i,t-5}, CI_{i,t-5}),$$
 
 where $B$ holds the baseline covariates (EFW, human capital, ln GDP per
-capita and its square, 5-year GDP growth, fertility, old-age dependency,
-Polity5, urbanization and $M_i \equiv IMR_{i,t-5}$), $SC$ is `c_comp` and
+capita, 5-year GDP growth, fertility, old-age dependency, Polity5,
+urbanization and $M_i \equiv IMR_{i,t-5}$; Section 0f), $SC$ is `c_comp` and
 $CI$ is `con_int` = `IM_upper_bound` - `IM_lower_bound`. $T$ is the set of
 treated windows, $N_1 = |T|$, and $C$ the comparison pool.
 
