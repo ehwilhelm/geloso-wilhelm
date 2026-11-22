@@ -1,10 +1,38 @@
 # Revised analysis plan: liberalization, state capacity and data quality
 
 *Draft for Eric's review. First version 16 November 2026, revised 18 and 19
-November 2026, and 20 November 2026 for `Version18`. Companion script:
-`Code/3) Revised Analysis (draft).R`, which now reads
-`Datawork~Nishant/Version18.csv` and runs end to end. Plain ASCII so it
-compiles through LaTeX.*
+November 2026, 20 November 2026 for `Version18` and 22 November 2026 for
+`Version19`. Companion script: `Code/3) Revised Analysis (draft).R`, which
+now reads `Datawork~Nishant/Version19.csv` and runs end to end. Plain ASCII
+so it compiles through LaTeX.*
+
+## 0e. Data updated to Nishant's `Version19` (22 Nov)
+
+- **Data:** `Datawork~Nishant/Version19.csv` (Nishant, 22 Nov), chosen by
+  Eric on 22 Nov as the analysis panel. It carries 7 of the 9 changes on
+  the 20 Nov list: the same 158 added country-years as
+  `Data/Version18_updated.csv`, 2024 values in the 2024 rows, the 8 PWT
+  growth values, Pakistan 1970 Polity5, recomputed lags, an `iso3` column,
+  and full `countrynum` and `oecd`. Every source variable was rebuilt and
+  checked again (`notes/Nishant Version19 Review 2026-11-22.md`).
+  `Data/Version18_updated.csv` and `Code/3a) Update Version18 panel.R` are
+  no longer used by the analysis; they stay in place for the record.
+- **Script changes:** the default data file is `Version19.csv`. The PWT and
+  Maddison files used to fill 5-year growth are now found by file name
+  inside any zip archive in `Datawork~Nishant`, because Nishant moved them
+  on 22 Nov (PWT into `Downloaded Dataset_Updated.zip`, Maddison into the
+  "Earlier Versions" subfolder); countries are matched to them on `iso3`.
+  Only 6 growth values are still filled outside the panel, all from
+  Maddison (Hungary and Kuwait 1970; Estonia, Latvia, Lithuania and Russia
+  1990).
+- **Treatments usable in the matching** (strict rule, 1970-2020): 53
+  liberalizations and 30 deliberalizations (`Version18_updated`: 53 and
+  29). The added one is Pakistan 1970-75, now that its Polity5 value is in.
+  With the 2024 extension: 53 and 31.
+- **Still open in the data** (none affects the headline matching): the 24
+  IMR values not from UN IGME 2025 (Section 6c), the 2024 `gdppc_5growth`
+  as a 3-year change (not used), and Venezuela's PWT GDP after 2010.
+- **Outputs:** `Results/version19/`. Results in Section 9d.
 
 ## 0d. Version18 completed from the EFW Ratings sheet (20 Nov, 10:30 AM)
 
@@ -179,6 +207,7 @@ over the same window as the EFW change (`change_IM`, `2) Analysis.R` line
 | Method | PSM (NN3, kernel) and Mahalanobis NN3 | Eric, 18 Nov |
 | Pre/post measurement-error decomposition | Appendix | Eric and Vincent, 18 Nov |
 | Fertility rate | Kept as a lagged covariate (F1); no further changes | Eric, 18 Nov |
+| Panel | Nishant's `Version19.csv` (replaces `Data/Version18_updated.csv`) | Eric, 22 Nov |
 | Jump threshold | **Strictly more than 1 point** in either direction, as in the literature (replaces the 18 Nov choice of 1 point or more). On `Version18` this drops one liberalization (Congo, Rep. 1990-95, +1.00) and no deliberalizations. Script setting `STRICT_THRESHOLD` | Eric, 20 Nov |
 
 ## 2. Design
@@ -559,6 +588,39 @@ On Nishant's `Version18.csv` (strict rule, 43 and 25 treated;
 `Results/version18/`): Mahalanobis S1 -2.84 (1.39), S2 -2.85 (1.50), S3
 -1.22 (1.23); no PSM estimate significant.
 
+## 9d. Run on `Version19` (22 Nov)
+
+Results are in `Results/version19/headline_1970-2020/` and
+`Results/version19/appendix_1970-2024/` (strict rule; 53 liberalizations
+and 30 deliberalizations in the headline sample). ATT on the IMR level at
+$t+5$, liberalizers, 1970-2020, bootstrap SE in parentheses (* = p < 0.05):
+
+| Estimator | S1 naive | S2 + `c_comp` | S3 + `con_int` |
+|---|---|---|---|
+| PSM NN3, plain | -5.84 (5.38) | -5.55 (5.47) | -2.88 (5.13) |
+| PSM NN3, bias-adjusted | -2.01 (2.43) | -2.32 (2.47) | -0.78 (2.28) |
+| PSM kernel, plain | -4.59 (3.33) | -1.70 (3.64) | -1.09 (3.56) |
+| PSM kernel, bias-adjusted | -2.76 (2.00) | -1.90 (2.07) | -1.18 (2.04) |
+| Mahalanobis NN3 (bias-adjusted) | -2.66 (1.36) | -2.28 (1.34) | -1.19 (1.20) |
+
+The liberalizers are the same 53 as on `Version18_updated`; the only change
+is one more control row (Pakistan 1975, now complete). Every estimate is
+negative and every one shrinks toward zero when `con_int` is added (S3 vs
+S2), by 0.6 to 2.7 deaths per 1,000. Mahalanobis S1 is now just outside 5%
+(p = 0.050, was 0.047), so no liberalizer estimate in pair A is significant
+at 5%. With deliberalizers out of the control group (pair B, unchanged from
+`Version18_updated`), Mahalanobis S1 stays significant (-2.64, SE 1.35).
+
+Deliberalizers (30 treated): no estimate is significant. Adding Pakistan
+moves the plain NN3 estimates the most (S2 from 0.1 to 11.5), which shows
+how fragile plain NN3 is with 30 treated; the bias-adjusted estimates move
+by at most 2.6. In the 2024 appendix (53 and 31 treated) nothing is
+significant at 5% (Mahalanobis S1 -2.43, SE 1.33).
+
+Regression benchmark (T6): -2.2 deaths per 1,000 per EFW point with
+covariates (p 0.013 to 0.016), unchanged by `con_int` (-2.17); the EFW
+change alone is not significant (-1.95, p 0.20).
+
 ## 10. Project workplan
 
 | Step | Who | What | Status (18 Nov) |
@@ -573,10 +635,10 @@ On Nishant's `Version18.csv` (strict rule, 43 and 25 treated;
 
 ### Next steps (Eric, 19 Nov, for 20 Nov)
 
-| Item | What | Status (20 Nov) |
+| Item | What | Status (22 Nov) |
 |---|---|---|
-| 1 | Review and validate the updated panel once Nishant adds unrounded `rgdpe`, `pop` and `hc` and the missing prior-period GDP for 5-year growth (147 country-years listed in `version16_missing_prior_gdp.csv`) | Done on `Version18` (Section 6c): PWT values confirmed exactly, growth gaps filled. EFW Ratings sheet confirmed as the EFW source; the 158 missing country-years added in `Data/Version18_updated.csv` (Section 0d) |
-| 2 | Specifications on the IMR level, with bias-adjusted PSM | Rerun on `Version18` (Section 9c) |
+| 1 | Review and validate the updated panel once Nishant adds unrounded `rgdpe`, `pop` and `hc` and the missing prior-period GDP for 5-year growth (147 country-years listed in `version16_missing_prior_gdp.csv`) | Done on `Version18` (Section 6c): PWT values confirmed exactly, growth gaps filled. EFW Ratings sheet confirmed as the EFW source; the 158 missing country-years added in `Data/Version18_updated.csv` (Section 0d). 22 Nov: Nishant's `Version19` includes them and checks out against the sources; it is now the analysis panel (Section 0e) |
+| 2 | Specifications on the IMR level, with bias-adjusted PSM | Rerun on `Version19` (Section 9d; earlier runs in 9c) |
 | 2b | Bias adjustment in mathematical form, with an explanation, in its own markdown file | Draft: `Code/3) PSM Bias Adjustment.md` |
 | 3 | Liberalizers as the headline, deliberalizers in the appendix; possibly a combined-magnitude analysis of liberalizers and deliberalizers in the appendix | First part done (figures F1, F1b). Combined magnitude: open, to define with Eric |
 | 4 | Prepare the agreed diagnostics (Section 7) | Tables T1-T7 and D1-D3 run; love plot and `con_int` vs IMR figure still to add |
