@@ -1,5 +1,5 @@
 # =============================================================================
-# 3) Revised Analysis (draft).R      DRAFT, 20 Nov 2026 - reads Version18.csv
+# 3) Revised Analysis (draft).R      DRAFT, 22 Nov 2026 - reads Version19.csv
 #                                    Outcome switched to IMR LEVELS (19 Nov pm)
 #
 # Companion to "3) Revised Analysis Plan.md" (read that first).
@@ -43,26 +43,33 @@
 #   Sample         : headline 1970-2020 (last EFW window 2010-15, outcome
 #                    2015-20). Appendix: extension to 2024 (APPENDIX_2024).
 #
-# Data notes for Version18.csv (Nishant, 20 Nov):
+# Data notes for Version19.csv (Nishant, 22 Nov; Eric chose it 22 Nov):
+#   - Version19 = Version18 plus the changes on the 20 Nov list: the 158
+#     country-years that the EFW Ratings sheet and UN IGME cover (the same
+#     rows as Data/Version18_updated.csv), 2024 values in the 2024 rows, the
+#     8 missing growth values from PWT, Pakistan 1970 Polity5, recomputed
+#     lags, an iso3 column, full countrynum and oecd. Checked against the
+#     sources 22 Nov: notes/Nishant Version19 Review 2026-11-22.md.
 #   - totalpop and totalGDP are dropped. GDP per capita = rgdpe / pop, both
-#     from PWT 11.0 (Eric, 20 Nov), now with full decimals.
+#     from PWT 11.0 (Eric, 20 Nov), with full decimals.
 #   - 5-yr GDP pc growth: the panel's `gdppc_5growth` column is used. Where
 #     the previous 5-year point is not a panel row (e.g. 1965 for 1970),
 #     Nishant computed it from PWT (Datawork~Nishant/gdp_growth_prior_rows.csv).
 #     Where the panel has both points, it equals the log difference computed
 #     here. If the panel ever has 1965 rows, they are read for growth only.
-#   - The 12 growth values still missing in Version18 are filled here
-#     (GROWTH_FILL): 8 from PWT 11.0 ("PWT csv.zip", full precision) and the
-#     4 that PWT cannot give (Hungary 1970; Estonia, Lithuania, Russia 1990)
-#     from the Maddison Project. List: tables/D4_growth_filled.csv.
-#   - Version18 rgdpe, pop and hc equal "PWT csv.zip" exactly (20 Nov check).
+#   - The 6 growth values PWT cannot give (Hungary and Kuwait 1970; Estonia,
+#     Latvia, Lithuania, Russia 1990) are filled here from the Maddison
+#     Project (GROWTH_FILL). List: tables/D4_growth_filled.csv.
+#   - Version19 rgdpe, pop and hc equal the full-precision PWT file exactly
+#     (22 Nov check).
 #   - PWT has no 2024 release yet: the 2024 rows carry 2023 PWT values.
 #   - Polity5 ends in 2018; the 2018 value stands in for 2020 and later.
 #   - The panel's lag* columns are not used; all lags are rebuilt here.
 #
 # Data: Datawork~Nishant is READ-ONLY. Nothing is written there.
-# Outputs: Results/<data file name>/ (e.g. Results/version18/). Earlier
-# results (Results/version16/, October Results/) stay untouched.
+# Outputs: Results/<data file name>/ (e.g. Results/version19/). Earlier
+# results (Results/version16/, version18/, version18_updated/, October
+# Results/) stay untouched.
 # =============================================================================
 
 
@@ -90,12 +97,12 @@ find_root <- function() {
 root <- find_root()
 
 # RA data (read-only). Override with Sys.setenv(REVISED_CSV = "...").
-# Default (20 Nov): Version18 completed with the country-years that the EFW
-# Ratings sheet and UN IGME cover but Version18 lacked, built by
-# "Code/3a) Update Version18 panel.R". Nishant's own file:
-# file.path(root, "Datawork~Nishant", "Version18.csv").
+# Default (Eric, 22 Nov): Nishant's Version19.csv, which already holds the
+# 158 added country-years and the other 20 Nov changes. Earlier panels:
+# Data/Version18_updated.csv (built 20 Nov by "Code/3a) Update Version18
+# panel.R") and Datawork~Nishant/Version18.csv.
 DATA_FILE <- Sys.getenv("REVISED_CSV",
-  file.path(root, "Data", "Version18_updated.csv"))
+  file.path(root, "Datawork~Nishant", "Version19.csv"))
 
 # APPENDIX_2024 = FALSE: headline, 1970-2020.
 # APPENDIX_2024 = TRUE : appendix, adds the 2015-20 EFW window with a
@@ -132,16 +139,18 @@ GDP_SOURCE <- "rgdpe_pop"  # "rgdpe_pop" (PWT, Eric 20 Nov) | "gdppc" (panel col
 # Order used: (1) log difference within the panel, (2) the panel's own
 # gdppc_5growth (prior years Nishant filled), (3) PWT 11.0 rgdpe / pop five
 # years earlier, from Nishant's full-precision PWT file, (4) where PWT has no
-# earlier year (Hungary 1965; Estonia, Lithuania, Russia 1985): growth from
-# the Maddison Project file in Datawork~Nishant. Both files are read inside
-# their zip archives; nothing is extracted or written in Datawork~Nishant.
+# earlier year (Hungary and Kuwait 1965; Estonia, Latvia, Lithuania, Russia
+# 1985): growth from the Maddison Project file in Datawork~Nishant.
+# Both files are found by name inside any zip archive in Datawork~Nishant,
+# so moving or renaming its subfolders does not break the script (22 Nov:
+# PWT is in "Downloaded Dataset_Updated.zip", Maddison in the "Earlier
+# Versions" subfolder). They are read in place; nothing is extracted or
+# written in Datawork~Nishant. Countries are matched to PWT and Maddison on
+# the panel's iso3 column (Version19 on), else on names.
 # GROWTH_FILL = "pwt_maddison" (default) | "pwt" (PWT only) | "none".
-GROWTH_FILL      <- Sys.getenv("GROWTH_FILL", "pwt_maddison")
-PWT_ZIP          <- file.path(root, "Datawork~Nishant", "PWT csv.zip")
-PWT_ZIP_CSV      <- "pwt110 (2)-Data.csv"
-MADDISON_ZIP     <- file.path(root, "Datawork~Nishant",
-                              "gdp-per-capita-maddison-project-database.zip")
-MADDISON_ZIP_CSV <- "gdp-per-capita-maddison-project-database.csv"
+GROWTH_FILL  <- Sys.getenv("GROWTH_FILL", "pwt_maddison")
+PWT_CSV      <- "pwt110 (2)-Data.csv"
+MADDISON_CSV <- "gdp-per-capita-maddison-project-database.csv"
 FERT_OPTION <- "F1"                 # F1 keep lagged fertility (decided 18 Nov)
 
 B_BOOT      <- as.integer(Sys.getenv("B_BOOT", "200"))
@@ -194,7 +203,18 @@ if (any(raw$year == 1965)) {
 }
 
 # --- 5-yr GDP pc growth from outside the panel (see GROWTH_FILL) -----------
-# Panel country names that differ from PWT 11.0, mapped to ISO3 codes
+# Finds a csv by file name inside the zip archives of Datawork~Nishant
+find_zip_member <- function(member) {
+  zips <- list.files(file.path(root, "Datawork~Nishant"), pattern = "\\.zip$",
+                     recursive = TRUE, full.names = TRUE)
+  for (z in zips) {
+    nm  <- unzip(z, list = TRUE)$Name
+    hit <- nm[basename(nm) == member & !grepl("^__MACOSX", nm)]
+    if (length(hit)) return(c(zip = z, csv = hit[1]))
+  }
+  stop("Cannot find '", member, "' in any zip archive in Datawork~Nishant.")
+}
+# Panels without an iso3 column: names that differ from PWT 11.0, to ISO3
 pwt_iso <- c("Bolivia" = "BOL", "Congo, Dem. Rep." = "COD", "Congo, Rep." = "COG",
              "Cote d'Ivoire" = "CIV", "Czech Republic" = "CZE", "Hong Kong" = "HKG",
              "Iran" = "IRN", "Laos" = "LAO", "Moldova" = "MDA", "Russia" = "RUS",
@@ -203,19 +223,25 @@ pwt_iso <- c("Bolivia" = "BOL", "Congo, Dem. Rep." = "COD", "Congo, Rep." = "COG
 growth_ext <- raw %>% distinct(country, year) %>%
   mutate(g_pwt = NA_real_, g_mad = NA_real_)
 if (GROWTH_FILL %in% c("pwt", "pwt_maddison")) {
-  pwt <- read.csv(unz(PWT_ZIP, PWT_ZIP_CSV), check.names = FALSE,
+  pwt_src <- find_zip_member(PWT_CSV)
+  pwt <- read.csv(unz(pwt_src[["zip"]], pwt_src[["csv"]]), check.names = FALSE,
                   stringsAsFactors = FALSE, encoding = "UTF-8")
-  name_iso <- setNames(pwt$countrycode, pwt$country)
-  growth_ext$iso <- ifelse(growth_ext$country %in% names(pwt_iso),
-                           pwt_iso[growth_ext$country],
-                           name_iso[growth_ext$country])
+  if ("iso3" %in% names(raw)) {
+    growth_ext$iso <- raw$iso3[match(growth_ext$country, raw$country)]
+  } else {
+    name_iso <- setNames(pwt$countrycode, pwt$country)
+    growth_ext$iso <- ifelse(growth_ext$country %in% names(pwt_iso),
+                             pwt_iso[growth_ext$country],
+                             name_iso[growth_ext$country])
+  }
   log_gpc <- function(tab, iso, yr) tab$lgpc[match(paste(iso, yr),
                                                    paste(tab$iso, tab$year))]
   pwt_l <- pwt %>% transmute(iso = countrycode, year, lgpc = log(rgdpe / pop))
   growth_ext$g_pwt <- log_gpc(pwt_l, growth_ext$iso, growth_ext$year) -
                       log_gpc(pwt_l, growth_ext$iso, growth_ext$year - 5)
   if (GROWTH_FILL == "pwt_maddison") {
-    mad <- read.csv(unz(MADDISON_ZIP, MADDISON_ZIP_CSV), check.names = FALSE,
+    mad_src <- find_zip_member(MADDISON_CSV)
+    mad <- read.csv(unz(mad_src[["zip"]], mad_src[["csv"]]), check.names = FALSE,
                     stringsAsFactors = FALSE)
     mad_l <- data.frame(iso = mad$Code, year = mad$Year,
                         lgpc = log(mad[["GDP per capita"]]))
