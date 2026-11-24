@@ -1,0 +1,15 @@
+"treatment","term","Estimate","Std..Error","z.value","Pr...z.."
+"EFWjump","(Intercept)",6.686,2.619,2.553,0.011
+"EFWjump","lagEFW",-1.601,0.192,-8.319,0
+"EFWjump","laglngdppc",-0.321,0.258,-1.242,0.214
+"EFWjump","laghc",1.072,0.474,2.263,0.024
+"EFWjump","lag_IM",-0.004,0.009,-0.395,0.693
+"EFWjump","lag_c_comp",0.313,0.157,2.001,0.045
+"EFWjump","lag_con_int",-0.044,0.034,-1.27,0.204
+"EFWdrop","(Intercept)",-8.839,3.048,-2.9,0.004
+"EFWdrop","lagEFW",0.497,0.281,1.767,0.077
+"EFWdrop","laglngdppc",0.369,0.279,1.322,0.186
+"EFWdrop","laghc",-1.049,0.685,-1.532,0.125
+"EFWdrop","lag_IM",0.004,0.009,0.409,0.682
+"EFWdrop","lag_c_comp",-0.156,0.186,-0.839,0.401
+"EFWdrop","lag_con_int",0.058,0.021,2.693,0.007

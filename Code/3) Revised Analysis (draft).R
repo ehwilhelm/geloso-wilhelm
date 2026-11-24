@@ -1,5 +1,5 @@
 # =============================================================================
-# 3) Revised Analysis (draft).R      DRAFT, 22 Nov 2026 - reads Version19.csv
+# 3) Revised Analysis (draft).R      DRAFT, 24 Nov 2026 - reads Version19_updated.csv
 #                                    Outcome switched to IMR LEVELS (19 Nov pm)
 #
 # Companion to "3) Revised Analysis Plan.md" (read that first).
@@ -8,8 +8,11 @@
 #         Effect on Infant Mortality" (Geloso & Wilhelm)
 #
 # Design (Eric, 18-19 Nov 2026):
-#   Main regressor : 5-year change in the EFW summary index
-#                    ("ECONOMIC FREEDOM ALL AREAS"). Change in EFW rank is a
+#   Main regressor : 5-year change in the EFW summary index, from the EFW
+#                    Panel Dataset (chain-linked; "ECONOMIC FREEDOM ALL
+#                    AREAS Panel Data Set"; Eric, 24 Nov, see EFW_INDEX).
+#                    Until 24 Nov: the EFW Ratings sheet ("ECONOMIC FREEDOM
+#                    ALL AREAS"). Change in EFW rank is a
 #                    separate analysis (switch TREAT_SCALE; threshold to
 #                    be decided).
 #   Treatment      : liberalizer   = EFW change over t-5..t >  +1
@@ -46,6 +49,12 @@
 #   Sample         : headline 1970-2020 (last EFW window 2010-15, outcome
 #                    2015-20). Appendix: extension to 2024 (APPENDIX_2024).
 #
+# Data notes for Version19_updated.csv (Nishant, 23 Nov): Version19 plus the
+#   EFW Panel Dataset summary and its five area ratings and their standard
+#   deviation (7 columns); all other columns are unchanged. The panel columns
+#   equal the "EFW Panel Dataset" sheet of the 2026 EFW file in all 1,644
+#   rows (24 Nov check). The EFW report (2026, p. 18 and p. iii) recommends
+#   the chain-linked panel dataset for longitudinal and panel studies.
 # Data notes for Version19.csv (Nishant, 22 Nov; Eric chose it 22 Nov):
 #   - Version19 = Version18 plus the changes on the 20 Nov list: the 158
 #     country-years that the EFW Ratings sheet and UN IGME cover (the same
@@ -100,12 +109,27 @@ find_root <- function() {
 root <- find_root()
 
 # RA data (read-only). Override with Sys.setenv(REVISED_CSV = "...").
-# Default (Eric, 22 Nov): Nishant's Version19.csv, which already holds the
-# 158 added country-years and the other 20 Nov changes. Earlier panels:
+# Default (Eric, 24 Nov): Nishant's Version19_updated.csv = Version19.csv
+# plus the EFW Panel Dataset columns. Earlier panels: Version19.csv (22 Nov),
 # Data/Version18_updated.csv (built 20 Nov by "Code/3a) Update Version18
 # panel.R") and Datawork~Nishant/Version18.csv.
 DATA_FILE <- Sys.getenv("REVISED_CSV",
-  file.path(root, "Datawork~Nishant", "Version19.csv"))
+  file.path(root, "Datawork~Nishant", "Version19_updated.csv"))
+
+# EFW_INDEX: which EFW summary index defines the treatment (jumps and drops)
+# and the lagged-EFW matching covariate.
+#   "panel"   (default, Eric 24 Nov): "ECONOMIC FREEDOM ALL AREAS Panel Data
+#             Set", the chain-linked EFW Panel Dataset, which the EFW report
+#             recommends for comparisons over time and panel studies
+#   "ratings" the annual EFW Ratings sheet ("ECONOMIC FREEDOM ALL AREAS"),
+#             used until 24 Nov
+# The EFW rank (TREAT_SCALE = "rank") stays the Ratings rank: the panel
+# dataset publishes no ranks.
+EFW_INDEX <- Sys.getenv("EFW_INDEX", "panel")
+EFW_COL   <- switch(EFW_INDEX,
+  panel   = "ECONOMIC FREEDOM ALL AREAS Panel Data Set",
+  ratings = "ECONOMIC FREEDOM ALL AREAS",
+  stop("EFW_INDEX must be panel or ratings"))
 
 # APPENDIX_2024 = FALSE: headline, 1970-2020.
 # APPENDIX_2024 = TRUE : appendix, adds the 2015-20 EFW window with a
@@ -186,7 +210,8 @@ run_tag <- paste0(if (APPENDIX_2024) "appendix_1970-2024" else "headline_1970-20
                   if (TREAT_SCALE == "rank") "_rank" else "",
                   if (STRICT_THRESHOLD) "" else "_ge1",
                   if (COVARIATE_SET == "lawson") "" else paste0("_cov-", COVARIATE_SET),
-                  if (MATCH_ON_IMR) "" else "_noIMR")
+                  if (MATCH_ON_IMR) "" else "_noIMR",
+                  if (EFW_INDEX == "panel") "" else paste0("_efw-", EFW_INDEX))
 
 # Labels that follow the outcome
 out_lab <- switch(OUTCOME,
@@ -277,7 +302,7 @@ level_vars <- c("infantmortality", "IM_lower_bound", "IM_upper_bound",
                 "oldagedep", "polity5", "urbanpop", SC_VARS)
 
 panel <- raw %>%
-  rename(EFW = `ECONOMIC FREEDOM ALL AREAS`, EFW_rank = `EFW RANK`,
+  rename(EFW = all_of(EFW_COL), EFW_rank = `EFW RANK`,
          gdppc_5growth_panel = gdppc_5growth) %>%
   filter(year %in% grid_years) %>%
   dplyr::select(country, year, all_of(level_vars)) %>%
@@ -1028,7 +1053,8 @@ saveRDS(list(panel = panel, main = res_main,
              settings = list(DATA_FILE = DATA_FILE, OUTCOME = OUTCOME,
                              APPENDIX_2024 = APPENDIX_2024, THRESHOLD = THRESHOLD,
                              TREAT_SCALE = TREAT_SCALE, SC_VARS = SC_VARS,
-                             GDP_SOURCE = GDP_SOURCE,
-                             B_BOOT = B_BOOT)),
+                             GDP_SOURCE = GDP_SOURCE, EFW_INDEX = EFW_INDEX,
+                             COVARIATE_SET = COVARIATE_SET,
+                             MATCH_ON_IMR = MATCH_ON_IMR, B_BOOT = B_BOOT)),
         file.path(out_dir, "results.rds"))
 cat("Done. Outputs in", out_dir, "\n")

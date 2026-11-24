@@ -1,10 +1,100 @@
 # Revised analysis plan: liberalization, state capacity and data quality
 
 *Draft for Eric's review. First version 16 November 2026, revised 18 and 19
-November 2026, 20 November 2026 for `Version18` and 22 November 2026 for
-`Version19`. Companion script: `Code/3) Revised Analysis (draft).R`, which
-now reads `Datawork~Nishant/Version19.csv` and runs end to end. Plain ASCII
-so it compiles through LaTeX.*
+November 2026, 20 November 2026 for `Version18`, 22 November 2026 for
+`Version19` and 24 November 2026 for `Version19_updated` and the EFW Panel
+Dataset. Companion script: `Code/3) Revised Analysis (draft).R`, which now
+reads `Datawork~Nishant/Version19_updated.csv` and runs end to end. Plain
+ASCII so it compiles through LaTeX.*
+
+## 0h. EFW Panel Dataset as the treatment index (24 Nov)
+
+Eric (24 Nov): until now the analysis used the "EFW Ratings" sheet of the
+EFW file; the "EFW Panel Dataset" sheet is the right one for a cross-country
+panel analysis. Nishant added the Panel Dataset to
+`Datawork~Nishant/Version19_updated.csv`, which is now the analysis panel.
+The treatment (5-year jumps and drops) and the lagged EFW matching covariate
+now use `ECONOMIC FREEDOM ALL AREAS Panel Data Set` instead of
+`ECONOMIC FREEDOM ALL AREAS`. Script setting `EFW_INDEX`: "panel" (default)
+or "ratings" (reproduces Section 9d exactly on this file).
+
+**Why the Panel Dataset.** The 2026 EFW report (p. 18) explains that the
+Ratings for each year are computed from the components available in that
+year, so a country's rating can move over time because coverage changed,
+not because policy did. The Panel Dataset chain-links the ratings to the
+most recent year (2024) so the index is comparable through time. The
+report's preface (p. iii) says: "Users doing long-term or longitudinal
+studies are encouraged to use the EFW Panel Dataset as it is the most
+consistent through time." Our treatment is a 5-year change within a
+country, which is exactly that kind of comparison, so the Panel Dataset is
+the appropriate index. Confirmed.
+
+**Validation of `Version19_updated.csv`.** 1,644 rows and 137 columns:
+`Version19.csv` plus seven columns (the panel summary index, its five areas
+and the standard deviation of the areas). All seven equal the "EFW Panel
+Dataset" sheet of the 2026 EFW researchers' file
+(`Datawork~Nishant/Earlier Versions_Datawork/economic-freedom-of-the-world-2026-master-index-data-for-researchers-iso.xlsx`)
+in every row, matched on ISO code and year. Run with the Ratings index,
+the script reproduces Section 9d exactly, so nothing else the analysis uses
+has changed.
+
+Panel minus Ratings, summary index, 1970-2024: correlation 0.971, mean
+difference -0.015, SD 0.317, range -1.94 to +2.50. The gap is widest in
+1970 (mean -0.30, SD 0.53) and in 2000 and 2005 (SD 0.42 to 0.44); in 2024,
+the base year, the panel value is the rating plus 0.01 for every country.
+The 5-year changes, which define treatment, correlate at 0.904.
+
+**Issues found (none blocks the analysis).**
+
+1. The five new area columns hold Panel Dataset areas, but their names
+   nearly repeat the Ratings area columns already in the file ("Area 1:
+   Size of Government" vs "Area 1 Size of Government"). A "Panel" suffix
+   would prevent mix-ups.
+2. `EFW RANK` and the quartile column are still from the Ratings sheet.
+   The Panel Dataset has scores, not ranks; a rank analysis on the panel
+   index would need ranks computed from the panel scores. The script keeps
+   `EFW_rank` from the Ratings sheet for now.
+3. The panel summary is missing for Uganda 1970 and Kyrgyzstan 2000, where
+   the Ratings have values. The Fraser sheet is blank there too. This drops
+   the Kyrgyzstan 2000-2005 liberalization (Ratings +1.55). Bahamas 1975
+   and Belize 1980-1990 are missing on both indices.
+4. The 2024 panel values are the ratings plus 0.01 for every country, as
+   in Fraser's file. Harmless.
+
+**Treated episodes.** Strict rule with Callais & Young adjacency blanking,
+1970-2020: 59 liberalizations and 25 deliberalizations are flagged, and 50
+and 21 have every covariate needed for matching (Ratings index, Section 9d:
+66 and 37 flagged, 55 and 33 in matching). With 2024: 50 and 22. With the
+Callais & Young covariate set: 48 and 19.
+
+The full list, with both indices side by side, is
+`Results/version19_updated/episodes_panel_vs_ratings_1970-2020.csv`: one row
+per episode flagged on either index, whether it is flagged on both, the
+panel only or the Ratings only, its 5-year change on each index, whether it
+enters matching on each, and, for liberalizations, whether Callais & Young
+(2023, Table 2) or Lawson (Table 2) list it.
+
+- Liberalizations: 45 on both indices, 14 on the panel only, 21 on the
+  Ratings only.
+- Five Ratings-only liberalizations in 2005-2010 (Gambia, Lebanon, Qatar,
+  Tajikistan, Yemen) have Ratings jumps of +1.09 to +1.97 but panel changes
+  of -0.37 to +0.35: coverage changes that chain-linking removes.
+- Adjacency blanking moves some episodes by one window. United Kingdom
+  1975-1980 (Ratings) becomes 1980-1985 (panel), Romania 1995-2000 becomes
+  2000-2005, and Guatemala and Poland 1990-1995 are blanked because the
+  panel flags their 1985-1990 windows first (Poland 1985-1990 is +1.01,
+  1990-1995 is +1.47).
+- Nine of the 14 panel-only liberalizations are just over the line
+  (Rwanda 1975-1980; Congo, Rep., Hungary, Israel, Mexico, Namibia and
+  Poland 1985-1990; Slovenia 1995-2000; Tajikistan 2000-2005: +1.00 to
+  +1.07 on the panel, +0.60 to +0.99 on the Ratings).
+- Deliberalizations: 18 on both, 7 on the panel only, 19 on the Ratings
+  only. Twelve of the 19 Ratings-only drops are 1970-1975 windows, where the
+  Ratings fall further than the panel.
+- Literature: of the 49 Callais & Young liberalizations, 29 are on our panel
+  list and 28 on our Ratings list; of Lawson's 47, 26 and 30. Fifteen Callais
+  & Young episodes and 16 Lawson episodes are on neither list; both papers
+  use earlier EFW editions, whose scores have since been revised.
 
 ## 0g. Chi-squared balance tests and propensity score overlap (22 Nov)
 
@@ -357,6 +447,7 @@ over the same window as the EFW change (`change_IM`, `2) Analysis.R` line
 | State capacity | O'Reilly-Murphy Index of State Capacity, time-varying: `c_comp` only (`pca_comp` is an alternative, never in the same spec) | Eric, 17 and 19 Nov |
 | Sample period | Headline 1970-2020; extension to 2024 in the appendix | Eric, 19 Nov |
 | Main regressor | Change in the EFW summary index; change in EFW rank as a separate analysis | Eric, 19 Nov |
+| EFW index | **EFW Panel Dataset** (`ECONOMIC FREEDOM ALL AREAS Panel Data Set`, chain-linked) for the treatment and the lagged EFW covariate (replaces the EFW Ratings sheet, Section 0h). Script setting `EFW_INDEX` | Eric, 24 Nov |
 | Specification sequence | Naive, then + state capacity (`c_comp`), then + `con_int` (headline); `rp` dropped | Eric, 19 Nov |
 | GDP per capita | PWT 11.0 `rgdpe / pop` (`totalpop`, `totalGDP` dropped), with 5-year growth; 2023 PWT values stand in for 2024 | Eric, 20 Nov (replaces 19 Nov OWID) |
 | Regime type | Polity5 as a matching covariate (2018 values stand in for 2020) | Eric, 16-17 Nov |
@@ -365,7 +456,7 @@ over the same window as the EFW change (`change_IM`, `2) Analysis.R` line
 | Pre/post measurement-error decomposition | Appendix | Eric and Vincent, 18 Nov |
 | Fertility rate | Kept as a lagged covariate (F1); no further changes | Eric, 18 Nov |
 | Matching covariates | Lawson set (lagged EFW, ln GDP per capita, human capital) plus IMR at $t-5$. Callais & Young set without the square as an appendix robustness check. ln GDP per capita squared dropped completely (Section 0f) | Eric, 22 Nov |
-| Panel | Nishant's `Version19.csv` (replaces `Data/Version18_updated.csv`) | Eric, 22 Nov |
+| Panel | Nishant's `Version19_updated.csv` = `Version19.csv` plus the EFW Panel Dataset columns (replaces `Version19.csv`, which replaced `Data/Version18_updated.csv` on 22 Nov) | Eric, 24 Nov |
 | Jump threshold | **Strictly more than 1 point** in either direction, as in the literature (replaces the 18 Nov choice of 1 point or more). On `Version18` this drops one liberalization (Congo, Rep. 1990-95, +1.00) and no deliberalizations. Script setting `STRICT_THRESHOLD` | Eric, 20 Nov |
 
 ## 2. Design
@@ -783,6 +874,63 @@ Robustness, Callais & Young set without the square
 Mahalanobis -3.03* / -3.41* / -1.57, kernel BA -3.19 / -1.76 / -1.40, NN3
 BA -3.79 / -2.65 / 0.02; nothing significant in S3. Runs with the covariate
 set used until 22 Nov are in the git history (commit bff7059).
+
+## 9e. Run on `Version19_updated` with the EFW Panel Dataset (24 Nov)
+
+Results are in `Results/version19_updated/headline_1970-2020/`,
+`Results/version19_updated/appendix_1970-2024/` and
+`Results/version19_updated/headline_1970-2020_cov-cy/`. Same design as
+Section 9d (strict rule; Lawson set plus IMR at $t-5$), with the treatment
+and the lagged EFW covariate taken from the Panel Dataset (Section 0h): 50
+liberalizations and 21 deliberalizations in the headline sample. ATT on the
+IMR level at $t+5$, liberalizers, 1970-2020, bootstrap SE in parentheses
+(* = p < 0.05):
+
+| Estimator | S1 naive | S2 + `c_comp` | S3 + `con_int` |
+|---|---|---|---|
+| PSM NN3, plain | -3.38 (5.57) | -2.71 (6.29) | -4.66 (5.91) |
+| PSM NN3, bias-adjusted | -2.47 (2.52) | -2.22 (2.37) | -1.01 (2.47) |
+| PSM kernel, plain | -4.31 (3.22) | -4.32 (3.44) | -3.24 (3.27) |
+| PSM kernel, bias-adjusted | -2.37 (1.72) | -2.22 (1.79) | -1.37 (1.83) |
+| Mahalanobis NN3 (bias-adjusted) | -1.41 (1.49) | -1.38 (1.29) | -2.93 (1.47)* |
+
+What changed from Section 9d:
+
+- Every liberalizer estimate is still negative. The only significant one is
+  now Mahalanobis in S3 (-2.93, p 0.047); the kernel BA (S1, S2) and
+  Mahalanobis (S1) estimates that were significant on the Ratings index are
+  not (-2.37, -2.22, -1.41).
+- Adding `con_int` (S3 vs S2) no longer moves every estimate toward zero.
+  It still does for the bias-adjusted PSM estimates (NN3 BA -2.22 to -1.01,
+  kernel BA -2.22 to -1.37) and plain kernel (-4.32 to -3.24), but plain NN3
+  (-2.71 to -4.66) and Mahalanobis (-1.38 to -2.93) grow. None of these
+  differences is significant (T4).
+- Excluding deliberalizers from the control group (pair B) gives the same
+  signs; Mahalanobis S3 is -2.49 (SE 1.46, p 0.088).
+- The regression benchmark (T6, 1,001 observations) is stronger: -2.98
+  deaths per 1,000 per EFW point with no covariates (p 0.049, was -1.67, p
+  0.26), -3.14 with the baseline covariates, -3.27 with `c_comp` and -3.05
+  with `con_int` (all p < 0.001, was about -2.5).
+
+Deliberalizers (21 treated): plain kernel is significantly positive in S1
+and S2 (+20.5 and +16.5 in pair C), not in S3 (+12.7); bias-adjusted NN3 in
+pair D, S2 is +8.5 (SE 3.9). Nothing else is significant.
+
+Appendix, 1970-2024 (50 and 22 treated): no liberalizer estimate is
+significant (Mahalanobis -2.01 / -1.67 / -2.26, kernel BA -2.33 / -2.98 /
+-1.72). For deliberalizers, plain kernel is significantly positive in all
+three specifications and bias-adjusted NN3 in pair C, S3 (+8.3).
+
+Robustness, Callais & Young set without the square (48 and 19 treated):
+liberalizer estimates are smaller and none is significant (Mahalanobis
+-1.68 / -1.71 / -0.69, kernel BA -0.73 / -1.85 / -1.02, NN3 BA -1.00 /
+-2.48 / -0.37).
+
+Balance (T8, liberalizers, S3): before matching LR chi2(6) = 103.8 (p
+0.000), Rubin's B 174. After matching: PSM NN3 0.7 (p 0.995, B 0.4, R
+1.02), PSM kernel 1.2 (p 0.98, B 20, R 0.59), Mahalanobis 4.6 (p 0.60, B
+41, R 0.95). As in Section 0g, the PSM samples balance on every test and
+Mahalanobis passes the chi-squared test but not Rubin's B.
 
 ## 10. Project workplan
 
