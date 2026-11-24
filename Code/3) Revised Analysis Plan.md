@@ -7,6 +7,121 @@ Dataset. Companion script: `Code/3) Revised Analysis (draft).R`, which now
 reads `Datawork~Nishant/Version19_updated.csv` and runs end to end. Plain
 ASCII so it compiles through LaTeX.*
 
+## 0i. Matching covariates: IMR at $t-5$ out of the headline (24 Nov, afternoon)
+
+Eric (24 Nov), after rereading Callais & Young (Section 4.3) and Lawson
+(Section 3): Callais & Young match on the lagged outcome (inequality);
+Lawson does not, and IMR is closer to the outcomes Lawson studies. Starting
+from the current specification (EFW Panel Dataset, Section 0h):
+
+1. **Headline:** Lawson's set (lagged EFW, ln GDP per capita, human
+   capital) without IMR at $t-5$; then + `c_comp` (S2) and + `con_int` (S3).
+2. **Appendix robustness (2):** the same plus IMR at $t-5$ (the headline
+   from 22 Nov until this morning, Section 9e).
+3. **Appendix robustness (3):** (2) plus the rest of the Callais & Young
+   set (5-year GDP per capita growth, fertility, old-age dependency,
+   Polity5, urbanization), never ln GDP per capita squared. Read as
+   building on (2), so it keeps IMR at $t-5$; the same set without IMR at
+   $t-5$ was run as well.
+
+Script: `MATCH_ON_IMR` now defaults to FALSE; run folders that match on IMR
+at $t-5$ end in `_imr`. The bias-adjusted PSM estimators still regress on
+IMR at $t-5$ (agreed 19 Nov, Section 3b), so the "BA" rows adjust for it;
+the plain PSM rows and Mahalanobis (bias-adjusted on its own matching
+covariates) do not. Because the PSM adjustment needs IMR at $t-5$, the
+samples are the same with and without it: 50 liberalizers and 859 rows
+(pair A) for the Lawson sets, 48 and 832 for the Callais & Young sets.
+
+| Set | Folder in `Results/version19_updated/` |
+|---|---|
+| Headline: Lawson | `headline_1970-2020/`, `appendix_1970-2024/` |
+| (2) Lawson + IMR at $t-5$ | `headline_1970-2020_imr/` |
+| (3) Callais & Young + IMR at $t-5$ | `headline_1970-2020_cov-cy_imr/` |
+| Callais & Young without IMR at $t-5$ | `headline_1970-2020_cov-cy/` |
+
+Every pair, specification and estimator for the four sets is in
+`Results/version19_updated/covariate_sets_headline_1970-2020.csv`, with the
+standardized difference in IMR at $t-5$ after NN3 and Mahalanobis matching.
+
+**Headline, liberalizers, 1970-2020** (ATT on the IMR level at $t+5$,
+bootstrap SE in parentheses, * = p < 0.05):
+
+| Estimator | S1 naive | S2 + `c_comp` | S3 + `con_int` |
+|---|---|---|---|
+| PSM NN3, plain | -8.52 (7.08) | -7.21 (7.05) | -10.34 (6.96) |
+| PSM NN3, bias-adjusted | -2.24 (2.30) | -1.46 (2.42) | -3.08 (2.44) |
+| PSM kernel, plain | -7.26 (4.15) | -7.43 (4.48) | -4.86 (4.00) |
+| PSM kernel, bias-adjusted | -2.22 (1.69) | -2.13 (1.86) | -1.23 (1.99) |
+| Mahalanobis NN3 (bias-adjusted) | -0.64 (2.67) | -1.90 (2.89) | -1.17 (2.33) |
+
+**S3 across the four sets** (liberalizers, pair A):
+
+| Estimator | Headline: Lawson | (2) + IMR | (3) C&Y + IMR | C&Y, no IMR |
+|---|---|---|---|---|
+| PSM NN3, plain | -10.34 (6.96) | -4.66 (5.91) | -2.23 (5.95) | -3.81 (6.40) |
+| PSM NN3, bias-adjusted | -3.08 (2.44) | -1.01 (2.47) | -0.37 (2.80) | -1.99 (2.92) |
+| PSM kernel, plain | -4.86 (4.00) | -3.24 (3.27) | -0.93 (3.61) | 1.11 (3.75) |
+| PSM kernel, bias-adjusted | -1.23 (1.99) | -1.37 (1.83) | -1.02 (2.00) | -1.35 (2.16) |
+| Mahalanobis NN3 (bias-adjusted) | -1.17 (2.33) | -2.93 (1.47)* | -0.69 (1.83) | 0.91 (2.15) |
+
+**Balance, S3, liberalizers** (chi-squared p-value / Rubin's B; Section
+0g). The chi-squared test covers the covariates matched on, so the last two
+rows add IMR at $t-5$, which the headline does not match on (standardized
+difference before matching: 0.12 for the Lawson sample, 0.13 for the
+Callais & Young sample):
+
+| | Headline: Lawson | (2) + IMR | (3) C&Y + IMR | C&Y, no IMR |
+|---|---|---|---|---|
+| Before matching | 0.000 / 173 | 0.000 / 174 | 0.000 / 171 | 0.000 / 171 |
+| PSM NN3 | 0.87 / 0.2 | 0.995 / 0.4 | 0.98 / 0.2 | 0.97 / 0.2 |
+| PSM kernel | 0.93 / 20 | 0.98 / 20 | 0.999 / 18 | 0.998 / 17 |
+| Mahalanobis | 0.70 / 34 | 0.60 / 41 | 0.32 / 71 | 0.45 / 63 |
+| IMR at $t-5$, std. diff. after NN3 | -0.25 | -0.14 | -0.07 | -0.06 |
+| IMR at $t-5$, std. diff. after Mahalanobis | 0.05 | 0.07 | -0.02 | 0.01 |
+
+What the test shows:
+
+- No liberalizer estimate is significant in the headline set. Across all
+  four sets the only significant one is Mahalanobis S3 with IMR at $t-5$
+  (-2.93). Nearly all estimates are negative.
+- Dropping IMR at $t-5$ makes the plain PSM estimates much larger (NN3
+  -7.2 to -10.3 instead of -2.7 to -4.7; kernel -4.9 to -7.4 instead of -3.2 to
+  -4.3). NN3 matching on
+  the Lawson set picks controls whose IMR at $t-5$ is higher than the
+  liberalizers' (std. diff. about -0.25), so part of the plain gap was
+  there before the EFW window. The bias-adjusted estimates, which correct
+  for IMR at $t-5$, stay between -1.2 and -3.1, close to set (2).
+- Mahalanobis without IMR at $t-5$ is smaller (-0.6 to -1.9) and its SEs
+  roughly double (2.3 to 2.9, from 1.3 to 1.5).
+- `con_int` (S3 vs S2) in the headline set: toward zero for plain kernel
+  (-7.43 to -4.86), kernel BA (-2.13 to -1.23) and Mahalanobis (-1.90 to
+  -1.17), away from zero for plain NN3 (-7.21 to -10.34) and NN3 BA (-1.46
+  to -3.08). None of these differences is significant (T4).
+- Caveat: `con_int` correlates at 0.82 with IMR at $t-5$ (D2). With IMR at
+  $t-5$ out of the matching, `con_int` partly stands in for the starting
+  IMR level, so S3 vs S2 mixes data quality with initial IMR. The
+  regression benchmark (T6) shows it: with the Lawson covariates and no IMR
+  at $t-5$, -6.69 deaths per 1,000 per EFW point, -6.57 with `c_comp` and
+  -4.13 with `con_int` (all p < 0.001); with IMR at $t-5$, -3.14, -3.27 and
+  -3.05.
+- Set (3), Callais & Young plus IMR at $t-5$: estimates close to zero
+  (Mahalanobis -1.68 / -1.71 / -0.69, kernel BA -0.73 / -1.85 / -1.02),
+  none significant. Without IMR at $t-5$ the picture is the same, with
+  Mahalanobis turning slightly positive in S2 and S3 (+2.23, +0.91).
+- Balance: every PSM sample passes the chi-squared test in every set and
+  specification (p at least 0.76, B at most 21). Mahalanobis passes the chi-squared test
+  everywhere but has B above 25 in S2 and S3 of every set and in every
+  Callais & Young specification (49 to 71); in the headline S1 it is 17.
+
+Deliberalizers, headline set (21 treated, pair C): plain kernel +23.2* /
++20.9* / +12.4, Mahalanobis +12.2* / +10.0* / +1.1 (with IMR at $t-5$:
++1.9 / +4.0 / +0.4); the bias-adjusted PSM estimates are +1.7 to +6.4, none
+significant. Appendix 1970-2024, headline set (50 and 22 treated):
+liberalizers NN3 BA -1.86 / -1.74 / -0.33, kernel BA -2.02 / -2.89 /
+-1.66, Mahalanobis -1.85 / -2.28 / -0.86, only plain NN3 in S2 significant
+(-16.1); deliberalizers plain kernel +25.0* / +23.9* / +16.3* and
+Mahalanobis +14.0* / +12.7* / +4.4.
+
 ## 0h. EFW Panel Dataset as the treatment index (24 Nov)
 
 Eric (24 Nov): until now the analysis used the "EFW Ratings" sheet of the
@@ -157,6 +272,9 @@ the 2024 appendix). It now uses the same rule as `Match()` and checks the
 row count. Only the NN3 columns of T5 changed; no estimate changed.
 
 ## 0f. Matching covariates revisited (22 Nov, afternoon)
+
+*Superseded on 24 Nov by Section 0i: the headline no longer matches on IMR
+at $t-5$.*
 
 Eric (22 Nov): the covariate set may overfit or include covariates that do
 not matter for EFW jumps and IMR. Drop ln GDP per capita squared (the
@@ -455,7 +573,7 @@ over the same window as the EFW change (`change_IM`, `2) Analysis.R` line
 | Method | PSM (NN3, kernel) and Mahalanobis NN3 | Eric, 18 Nov |
 | Pre/post measurement-error decomposition | Appendix | Eric and Vincent, 18 Nov |
 | Fertility rate | Kept as a lagged covariate (F1); no further changes | Eric, 18 Nov |
-| Matching covariates | Lawson set (lagged EFW, ln GDP per capita, human capital) plus IMR at $t-5$. Callais & Young set without the square as an appendix robustness check. ln GDP per capita squared dropped completely (Section 0f) | Eric, 22 Nov |
+| Matching covariates | Lawson set (lagged EFW, ln GDP per capita, human capital) **without** IMR at $t-5$, as in Lawson. Appendix robustness: (2) the same plus IMR at $t-5$; (3) plus the rest of the Callais & Young set. ln GDP per capita squared dropped completely (Sections 0f, 0i). Script setting `MATCH_ON_IMR` | Eric, 24 Nov (replaces 22 Nov) |
 | Panel | Nishant's `Version19_updated.csv` = `Version19.csv` plus the EFW Panel Dataset columns (replaces `Version19.csv`, which replaced `Data/Version18_updated.csv` on 22 Nov) | Eric, 24 Nov |
 | Jump threshold | **Strictly more than 1 point** in either direction, as in the literature (replaces the 18 Nov choice of 1 point or more). On `Version18` this drops one liberalization (Congo, Rep. 1990-95, +1.00) and no deliberalizations. Script setting `STRICT_THRESHOLD` | Eric, 20 Nov |
 
@@ -471,11 +589,12 @@ over the same window as the EFW change (`change_IM`, `2) Analysis.R` line
   deaths per 1,000 live births five years after the EFW window. Alternative:
   the level at the end of the window, $Y_{it}$. The change outcomes used
   until 19 Nov ($Y_{i,t+5} - Y_{i,t}$ and $Y_{it} - Y_{i,t-5}$) are retired.
-- **Baseline covariates, all at $t-5$ (Eric, 22 Nov):** EFW, ln GDP per
-  capita, human capital and IMR (Lawson's set plus the lagged outcome;
-  Section 0f). Appendix robustness: the Callais & Young set without the
-  square (adds 5-year GDP growth, fertility rate (Section 5), old-age
-  dependency, Polity5 and urbanization).
+- **Baseline covariates, all at $t-5$ (Eric, 24 Nov):** EFW, ln GDP per
+  capita and human capital (Lawson's set; Section 0i). IMR at $t-5$ is not
+  matched on in the headline, but the bias-adjusted PSM estimators regress
+  on it. Appendix robustness: (2) plus IMR at $t-5$; (3) plus also 5-year
+  GDP growth, fertility rate (Section 5), old-age dependency, Polity5 and
+  urbanization (the Callais & Young set without the square).
 - **State capacity:** O'Reilly-Murphy `c_comp` at $t-5$ (Eric, 19 Nov).
   `pca_comp` correlates with it at 0.99999, so it is only an alternative
   (`SC_VARS`), never added alongside it.
@@ -794,6 +913,8 @@ the 2015-20 window (outcome 2020-24) needs IMR for 2024 (present) and the
   2005-2020 only, once merged.
 - R9: 5-year GDP per capita growth from PWT `rgdpna` instead of `rgdpe`
   (PWT's recommendation for growth over time; see Section 6c).
+- R10 (24 Nov, Section 0i): matching covariates, (2) Lawson set plus IMR at
+  $t-5$ and (3) plus the rest of the Callais & Young set.
 
 ## 9. How results map to the case-study matrix
 
@@ -877,9 +998,10 @@ set used until 22 Nov are in the git history (commit bff7059).
 
 ## 9e. Run on `Version19_updated` with the EFW Panel Dataset (24 Nov)
 
-Results are in `Results/version19_updated/headline_1970-2020/`,
-`Results/version19_updated/appendix_1970-2024/` and
-`Results/version19_updated/headline_1970-2020_cov-cy/`. Same design as
+*Since the afternoon of 24 Nov this run is appendix robustness (2), Section
+0i.* Results are in `Results/version19_updated/headline_1970-2020_imr/` and
+`Results/version19_updated/headline_1970-2020_cov-cy_imr/`; the 2024 run
+with IMR at $t-5$ is in the git history (commit 8d8f68c). Same design as
 Section 9d (strict rule; Lawson set plus IMR at $t-5$), with the treatment
 and the lagged EFW covariate taken from the Panel Dataset (Section 0h): 50
 liberalizations and 21 deliberalizations in the headline sample. ATT on the

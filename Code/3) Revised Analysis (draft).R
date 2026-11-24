@@ -27,12 +27,13 @@
 #                    Alternative: "IM_t", the level at the end of the window.
 #                    The earlier change outcomes stay available as settings:
 #                    "change_IM_post" (t..t+5) and "change_IM" (t-5..t).
-#   Covariates     : at t-5 (Eric, 22 Nov): Lawson's set (EFW, ln GDP pc,
-#                    hc) plus IMR at t-5. Robustness (appendix): the
-#                    Callais & Young set without ln GDP pc squared (adds
-#                    5-yr GDP pc growth, fertility, old-age dependency,
-#                    Polity5, urbanization). Settings: COVARIATE_SET,
-#                    MATCH_ON_IMR.
+#   Covariates     : at t-5 (Eric, 24 Nov): Lawson's set (EFW, ln GDP pc,
+#                    hc), without IMR at t-5. Robustness (appendix): (a)
+#                    the same plus IMR at t-5; (b) the Callais & Young set
+#                    without ln GDP pc squared (adds 5-yr GDP pc growth,
+#                    fertility, old-age dependency, Polity5, urbanization)
+#                    plus IMR at t-5, and without it. Settings:
+#                    COVARIATE_SET, MATCH_ON_IMR.
 #   Estimators     : PSM NN3, PSM kernel (Epanechnikov), Mahalanobis NN3 (BA).
 #                    Each PSM estimator is also reported bias-adjusted (BA):
 #                    within the matched sample, a regression of the outcome
@@ -181,20 +182,22 @@ MADDISON_CSV <- "gdp-per-capita-maddison-project-database.csv"
 FERT_OPTION <- "F1"                 # F1 keep lagged fertility (decided 18 Nov)
 
 # Matching covariates, all at t-5 (Eric, 22 Nov: drop ln GDP pc squared, whose
-# Kuznets-curve reason concerns inequality, not IMR; headline uses Lawson's
-# leaner set plus IMR at t-5). COVARIATE_SET:
+# Kuznets-curve reason concerns inequality, not IMR; Eric, 24 Nov: headline
+# uses Lawson's set without IMR at t-5, as Lawson does). COVARIATE_SET:
 #   "lawson"    Lawson (Working Paper, Section 3): EFW, ln GDP pc, hc
 #               (default, headline)
 #   "cy"        Callais & Young (Section 4.3) without the square: EFW, hc,
 #               ln GDP pc, 5-yr GDP pc growth, fertility, old-age
 #               dependency, Polity5, urbanization (appendix robustness)
-# MATCH_ON_IMR = TRUE (default): IMR at t-5, the outcome's level before the
-#   EFW window, is also matched on (Callais & Young match on the lagged
-#   outcome). FALSE: left out of the matching; the bias-adjusted PSM
-#   estimators still regress on it (BA_VAR) and then make the whole IMR(t-5)
-#   correction, and Mahalanobis (BA) no longer adjusts for it.
+# MATCH_ON_IMR = FALSE (default since 24 Nov; until then TRUE): IMR at t-5 is
+#   left out of the matching, as in Lawson. The bias-adjusted PSM estimators
+#   still regress on it (BA_VAR, agreed 19 Nov) and then make the whole
+#   IMR(t-5) correction; Mahalanobis (BA) does not adjust for it.
+#   TRUE (appendix robustness, run folders end in "_imr"): IMR at t-5, the
+#   outcome's level before the EFW window, is also matched on (Callais &
+#   Young match on the lagged outcome).
 COVARIATE_SET <- Sys.getenv("COVARIATE_SET", "lawson")
-MATCH_ON_IMR  <- as.logical(Sys.getenv("MATCH_ON_IMR", "TRUE"))
+MATCH_ON_IMR  <- as.logical(Sys.getenv("MATCH_ON_IMR", "FALSE"))
 
 B_BOOT      <- as.integer(Sys.getenv("B_BOOT", "200"))
 SEED        <- 50826
@@ -210,7 +213,7 @@ run_tag <- paste0(if (APPENDIX_2024) "appendix_1970-2024" else "headline_1970-20
                   if (TREAT_SCALE == "rank") "_rank" else "",
                   if (STRICT_THRESHOLD) "" else "_ge1",
                   if (COVARIATE_SET == "lawson") "" else paste0("_cov-", COVARIATE_SET),
-                  if (MATCH_ON_IMR) "" else "_noIMR",
+                  if (MATCH_ON_IMR) "_imr" else "",
                   if (EFW_INDEX == "panel") "" else paste0("_efw-", EFW_INDEX))
 
 # Labels that follow the outcome

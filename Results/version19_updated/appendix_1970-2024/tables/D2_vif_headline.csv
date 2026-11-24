@@ -1,7 +1,6 @@
 "variable","VIF"
-"lagEFW",2.7
-"laglngdppc",3.6
-"laghc",4.4
-"lag_IM",5.6
+"lagEFW",2.6
+"laglngdppc",3.3
+"laghc",3.8
 "lag_c_comp",2.8
-"lag_con_int",3.2
+"lag_con_int",2.1
